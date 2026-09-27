@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx -y tsx --test tests/tic-tac-toe.test.mjs"
+    "test": "npx -y tsx --test tests/*.test.mjs"
   },
   "dependencies": {
     "next": "16.3.6",

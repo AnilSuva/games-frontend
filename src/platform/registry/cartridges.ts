@@ -13,6 +13,9 @@ export const CARTRIDGE_MAP: Record<
   "tic-tac-toe": React.lazy(
     () => import("@/games/board/tic-tac-toe/components/TicTacToeGame")
   ),
+  "connect-four": React.lazy(
+    () => import("@/games/board/connect-four/components/ConnectFourGame")
+  ),
   "brick-blast": React.lazy(
     () => import("@/games/arcade/brick-blast/preview/BrickBlastPreview")
   ),

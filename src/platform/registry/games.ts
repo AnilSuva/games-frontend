@@ -37,13 +37,15 @@ export const GAME_MANIFESTS: GameManifest[] = [
       "A vertical battle of wits. Drop checkers into the grid and be the first to connect four in a line while blocking your opponent.",
     category: "board",
     engine: "react-dom",
-    status: "coming-soon",
+    status: "available",
     supportedModes: ["local-2p", "pvp-bot"],
     defaultOrientation: "portrait",
     aspectRatio: "4/3",
     iconName: "circle-dot",
     badgeText: "Popular",
     tags: ["Strategy", "Turn-Based"],
+    loader: () =>
+      import("@/games/board/connect-four/components/ConnectFourGame"),
   },
   {
     id: "checkers",
