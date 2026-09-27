@@ -9,6 +9,7 @@ import { requestBotMove, type BotDifficulty } from "../bot/botService";
 import { consumeStartingPlayer } from "@/games/common/startingPlayer";
 import { TicTacToeCell } from "./TicTacToeCell";
 import { WinningStrike } from "./WinningStrike";
+import { soundManager } from "@/platform/audio";
 
 interface SessionConfig {
   mode: "1v1" | "vs-bot";
@@ -320,7 +321,10 @@ export default function TicTacToeGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -328,7 +332,10 @@ export default function TicTacToeGame({
 
             <button
               type="button"
-              onClick={startFreshMatch}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                startFreshMatch();
+              }}
               className="px-3.5 py-1 text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] bg-white sm:hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] rounded-lg transition shadow-xs cursor-pointer"
             >
               Reset
@@ -338,7 +345,10 @@ export default function TicTacToeGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -346,7 +356,10 @@ export default function TicTacToeGame({
 
             <button
               type="button"
-              onClick={startFreshMatch}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                startFreshMatch();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               Play Again

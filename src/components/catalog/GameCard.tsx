@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { GameMetadata } from "@/platform/registry/types";
+import { soundManager } from "@/platform/audio";
 
 interface GameCardProps {
   game: GameMetadata;
@@ -95,6 +96,7 @@ export function GameCard({ game }: GameCardProps) {
   const wrapperProps = isAvailable
     ? {
         href: `/games/${game.id}`,
+        onClick: () => soundManager.play("buttonClick"),
         className:
           "group flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917]",
       }

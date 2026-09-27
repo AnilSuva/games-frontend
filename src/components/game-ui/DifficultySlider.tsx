@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useCallback, useRef } from "react";
+import { soundManager } from "@/platform/audio";
 
 interface DifficultySliderProps<T extends string = string> {
   /** Ordered list of difficulty values from lowest to highest */
@@ -91,7 +92,12 @@ export function DifficultySlider<T extends string = string>({
               <button
                 key={val}
                 type="button"
-                onClick={() => onChange(val)}
+                onClick={() => {
+                  if (val !== value) {
+                    soundManager.play("buttonClick");
+                  }
+                  onChange(val);
+                }}
                 style={{ left: getPercentage(index) }}
                 className={`absolute top-0 -translate-x-1/2 capitalize transition-colors duration-150 focus-visible:outline-none focus-visible:underline cursor-pointer ${
                   isSelected

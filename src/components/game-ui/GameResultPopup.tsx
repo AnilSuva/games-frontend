@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { soundManager } from "@/platform/audio";
 
 interface GameResultPopupProps {
   /** Result label (e.g. "Orange won", "Blue won", "Draw") */
@@ -26,6 +27,20 @@ export function GameResultPopup({
   onClose,
   homeHref = "/",
 }: GameResultPopupProps) {
+  const handlePlayAgain = () => {
+    soundManager.play("buttonClick");
+    onPlayAgain();
+  };
+
+  const handleClose = () => {
+    soundManager.play("buttonClick");
+    onClose();
+  };
+
+  const handleHomeClick = () => {
+    soundManager.play("buttonClick");
+  };
+
   return (
     <div
       role="dialog"
@@ -50,7 +65,7 @@ export function GameResultPopup({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 -mr-1.5 -mt-1.5 flex items-center justify-center rounded-lg text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:bg-[#f0eee9] active:bg-[#e7e4dc] transition-colors cursor-pointer"
             aria-label="Close result"
           >
@@ -70,7 +85,7 @@ export function GameResultPopup({
         <div className="flex flex-col gap-2 pt-0.5">
           <button
             type="button"
-            onClick={onPlayAgain}
+            onClick={handlePlayAgain}
             className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-[#1c1917] sm:hover:bg-[#322f2c] active:bg-black transition-colors shadow-xs cursor-pointer flex items-center justify-center"
           >
             Play Again
@@ -78,6 +93,7 @@ export function GameResultPopup({
 
           <Link
             href={homeHref}
+            onClick={handleHomeClick}
             className="w-full py-2 px-4 rounded-xl text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:bg-[#f0eee9] active:bg-[#e7e4dc] border border-[#e6e3dc] text-center transition-colors shadow-2xs block"
           >
             Home

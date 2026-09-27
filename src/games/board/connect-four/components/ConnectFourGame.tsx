@@ -9,6 +9,7 @@ import { requestBotMove, terminateBotWorker, type BotDifficulty } from "../bot/b
 import { consumeStartingPlayer } from "@/games/common/startingPlayer";
 import { ConnectFourCell } from "./ConnectFourCell";
 import { WinningLine } from "./WinningLine";
+import { soundManager } from "@/platform/audio";
 
 interface SessionConfig {
   mode: "1v1" | "vs-bot";
@@ -71,6 +72,15 @@ export default function ConnectFourGame({
   const [state, dispatch] = useReducer(connectFourReducer, undefined, createInitialState);
   const botAbortControllerRef = useRef<AbortController | null>(null);
   const columnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const prevMoveCountRef = useRef<number>(0);
+
+  // Play drop-ball sound on every accepted disc drop (human or bot)
+  useEffect(() => {
+    if (!inModeSelection && state.moveCount > prevMoveCountRef.current) {
+      soundManager.play("dropBall");
+    }
+    prevMoveCountRef.current = state.moveCount;
+  }, [state.moveCount, inModeSelection]);
 
   useEffect(() => {
     return () => {
@@ -353,7 +363,10 @@ export default function ConnectFourGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -361,7 +374,10 @@ export default function ConnectFourGame({
 
             <button
               type="button"
-              onClick={startFreshMatch}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                startFreshMatch();
+              }}
               className="px-3.5 py-1 text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] bg-white sm:hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] rounded-lg transition shadow-xs cursor-pointer"
             >
               Reset
@@ -371,7 +387,10 @@ export default function ConnectFourGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -379,7 +398,10 @@ export default function ConnectFourGame({
 
             <button
               type="button"
-              onClick={startFreshMatch}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                startFreshMatch();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               Play Again

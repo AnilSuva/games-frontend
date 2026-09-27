@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { GameMetadata } from "@/platform/registry/types";
 import type { GameLifecycle } from "@/games/common/types";
+import { soundManager } from "@/platform/audio";
 
 interface GameHUDProps {
   game: GameMetadata;
@@ -21,12 +22,27 @@ export function GameHUD({
   onToggleFullscreen,
   isFullscreen,
 }: GameHUDProps) {
+  const handleBackClick = () => {
+    soundManager.play("buttonClick");
+  };
+
+  const handlePauseClick = () => {
+    soundManager.play("buttonClick");
+    onPause();
+  };
+
+  const handleToggleFullscreen = () => {
+    soundManager.play("buttonClick");
+    onToggleFullscreen();
+  };
+
   return (
     <div className="w-full flex items-center justify-between px-3 sm:px-4 py-2.5 bg-white border-b border-[#e6e3dc] select-none">
       {/* Back and Title */}
       <div className="flex items-center gap-2.5">
         <Link
           href="/"
+          onClick={handleBackClick}
           className="p-1 rounded-md text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:bg-[#f4f2eb] active:bg-[#f4f2eb] transition cursor-pointer"
           aria-label="Back to Games"
         >
@@ -56,7 +72,7 @@ export function GameHUD({
         {lifecycle === "playing" && (
           <button
             type="button"
-            onClick={onPause}
+            onClick={handlePauseClick}
             className="px-2.5 py-1 rounded-md text-xs font-medium text-[#1c1917] bg-[#faf9f6] sm:hover:bg-[#eeece6] active:bg-[#eeece6] border border-[#e6e3dc] transition flex items-center gap-1.5 cursor-pointer"
             aria-label="Pause game"
           >
@@ -69,7 +85,7 @@ export function GameHUD({
 
         <button
           type="button"
-          onClick={onToggleFullscreen}
+          onClick={handleToggleFullscreen}
           className="p-1.5 rounded-md text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:bg-[#f4f2eb] active:bg-[#f4f2eb] transition cursor-pointer"
           aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
         >

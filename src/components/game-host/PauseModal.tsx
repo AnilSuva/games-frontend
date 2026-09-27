@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { soundManager } from "@/platform/audio";
 
 interface PauseModalProps {
   isOpen: boolean;
@@ -10,6 +11,20 @@ interface PauseModalProps {
 
 export function PauseModal({ isOpen, onResume, onRestart }: PauseModalProps) {
   if (!isOpen) return null;
+
+  const handleResume = () => {
+    soundManager.play("buttonClick");
+    onResume();
+  };
+
+  const handleRestart = () => {
+    soundManager.play("buttonClick");
+    onRestart();
+  };
+
+  const handleExit = () => {
+    soundManager.play("buttonClick");
+  };
 
   return (
     <div 
@@ -28,20 +43,21 @@ export function PauseModal({ isOpen, onResume, onRestart }: PauseModalProps) {
 
         <div className="flex flex-col gap-2">
           <button
-            onClick={onResume}
-            className="w-full py-2 px-4 rounded-lg font-medium text-xs bg-[#1c1917] hover:bg-[#322f2c] text-white shadow-sm transition active:scale-[0.98]"
+            onClick={handleResume}
+            className="w-full py-2 px-4 rounded-lg font-medium text-xs bg-[#1c1917] hover:bg-[#322f2c] text-white shadow-sm transition active:scale-[0.98] cursor-pointer"
           >
             Resume
           </button>
           <button
-            onClick={onRestart}
-            className="w-full py-2 px-4 rounded-lg font-medium text-xs bg-[#faf9f6] hover:bg-[#eeece6] text-[#1c1917] border border-[#e6e3dc] transition active:scale-[0.98]"
+            onClick={handleRestart}
+            className="w-full py-2 px-4 rounded-lg font-medium text-xs bg-[#faf9f6] hover:bg-[#eeece6] text-[#1c1917] border border-[#e6e3dc] transition active:scale-[0.98] cursor-pointer"
           >
             Restart
           </button>
           <Link
             href="/"
-            className="w-full py-2 px-4 rounded-lg font-medium text-xs text-[#6b665f] hover:text-[#1c1917] transition text-center"
+            onClick={handleExit}
+            className="w-full py-2 px-4 rounded-lg font-medium text-xs text-[#6b665f] hover:text-[#1c1917] transition text-center cursor-pointer"
           >
             Exit to Games
           </Link>

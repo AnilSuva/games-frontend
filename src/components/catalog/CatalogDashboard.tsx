@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { GameCategory, GameMetadata } from "@/platform/registry/types";
+import { soundManager } from "@/platform/audio";
 import { GameGrid } from "./GameGrid";
 
 interface CatalogDashboardProps {
@@ -13,6 +14,18 @@ type FilterTab = "all" | GameCategory;
 export function CatalogDashboard({ games }: CatalogDashboardProps) {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSelectTab = (tab: FilterTab) => {
+    if (tab !== activeTab) {
+      soundManager.play("buttonClick");
+    }
+    setActiveTab(tab);
+  };
+
+  const handleClearSearch = () => {
+    soundManager.play("buttonClick");
+    setSearchQuery("");
+  };
 
   const filteredGames = useMemo(() => {
     return games.filter((game) => {
@@ -50,7 +63,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("all")}
+            onClick={() => handleSelectTab("all")}
             className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               activeTab === "all"
                 ? "bg-[#1c1917] text-white shadow-sm"
@@ -61,7 +74,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("board")}
+            onClick={() => handleSelectTab("board")}
             className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               activeTab === "board"
                 ? "bg-[#1c1917] text-white shadow-sm"
@@ -72,7 +85,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("arcade")}
+            onClick={() => handleSelectTab("arcade")}
             className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               activeTab === "arcade"
                 ? "bg-[#1c1917] text-white shadow-sm"
@@ -103,7 +116,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </svg>
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery("")}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#9c978e] hover:text-[#1c1917]"
               aria-label="Clear search"
             >

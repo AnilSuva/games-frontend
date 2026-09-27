@@ -30,6 +30,7 @@ import { ALL_POWER_UP_TYPES, POWER_UP_DEFINITIONS, type PowerUpType } from "../c
 import { generateLevel, getLevelBaseSpeed } from "../levels/generator";
 import type { Ball, Brick, BrickBlastCallbacks, DroppedPowerUp, Paddle } from "./types";
 import type { PlatformPlayer } from "@/games/common/startingPlayer";
+import { soundManager } from "@/platform/audio";
 import { BrickBlastBotController } from "./botController";
 
 export interface SceneInitData {
@@ -73,11 +74,19 @@ export class BrickBlastScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
 
+  // Audio effects
+  private tileBreakSound: Phaser.Sound.BaseSound | null = null;
+  private lastTileBreakSoundTime = 0;
+
   // Visual text overlay
   private statusText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "BrickBlastScene" });
+  }
+
+  preload() {
+    soundManager.preloadPhaser(this, "tileBreak");
   }
 
   private clearAllGameObjects() {
@@ -170,6 +179,9 @@ export class BrickBlastScene extends Phaser.Scene {
     // 6. Build Level 1 Bricks & Serve initial Ball
     this.buildCurrentLevel();
     this.serveBall(this.currentStarter);
+
+    // 7. Instantiate preloaded audio
+    this.tileBreakSound = soundManager.addPhaserSound(this, "tileBreak");
   }
 
   private createPaddle(player: PlatformPlayer, y: number, color: number): Paddle {
@@ -638,6 +650,9 @@ export class BrickBlastScene extends Phaser.Scene {
           // 2. Remove brick from active collision collection immediately
           this.bricks.splice(i, 1);
 
+          // 3. Play destruction sound effect
+          this.playTileBreakSound();
+
           const pts = brick.def.isSpecial
             ? POINTS_SPECIAL_BRICK
             : brick.def.maxHp === 2
@@ -910,6 +925,21 @@ export class BrickBlastScene extends Phaser.Scene {
     this.callbacks.onLifecycleChange?.("playing");
   }
 
+  private playTileBreakSound() {
+    const now = performance.now();
+    // Throttle closely-spaced events (< 25ms) to handle multiple brick breaks efficiently without distortion
+    if (now - this.lastTileBreakSoundTime < 25) {
+      return;
+    }
+    this.lastTileBreakSoundTime = now;
+
+    if (this.tileBreakSound) {
+      this.tileBreakSound.play();
+    } else {
+      soundManager.play("tileBreak");
+    }
+  }
+
   public shutdown() {
     this.removeCanvasPointerListeners();
     this.botController?.reset();
@@ -918,5 +948,11 @@ export class BrickBlastScene extends Phaser.Scene {
     this.orangePaddle?.graphics?.destroy();
     this.bluePaddle?.graphics?.destroy();
     this.statusText?.destroy();
+
+    // Clean up audio resources on scene shutdown / destruction
+    if (this.tileBreakSound) {
+      this.tileBreakSound.destroy();
+      this.tileBreakSound = null;
+    }
   }
 }

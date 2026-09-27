@@ -2,6 +2,7 @@
 
 import { ReactNode, useState } from "react";
 import { DifficultySlider } from "./DifficultySlider";
+import { soundManager } from "@/platform/audio";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ export function GameModeSelector({
 
   const handleModeClick = (mode: GameModeOption) => {
     if (mode.disabled) return;
+    soundManager.play("buttonClick");
 
     if (mode.config) {
       // Navigate to config sub-screen
@@ -100,9 +102,15 @@ export function GameModeSelector({
   };
 
   const handleStartConfigured = () => {
+    soundManager.play("buttonClick");
     if (activeModeId) {
       onSelectConfiguredMode(activeModeId, configValue);
     }
+  };
+
+  const handleBackToModes = () => {
+    soundManager.play("buttonClick");
+    handleSwitchScreen("main");
   };
 
   return (
@@ -192,7 +200,7 @@ export function GameModeSelector({
 
             <button
               type="button"
-              onClick={() => handleSwitchScreen("main")}
+              onClick={handleBackToModes}
               className="w-full min-h-[36px] py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors flex items-center justify-center cursor-pointer"
             >
               ← Back to modes

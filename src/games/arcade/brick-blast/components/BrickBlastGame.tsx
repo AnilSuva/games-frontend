@@ -5,6 +5,7 @@ import type { GameHostProps, IGameController } from "@/games/common/types";
 import { GameModeSelector, type GameModeOption } from "@/components/game-ui/GameModeSelector";
 import { GameResultPopup } from "@/components/game-ui/GameResultPopup";
 import { consumeStartingPlayer, type PlatformPlayer } from "@/games/common/startingPlayer";
+import { soundManager } from "@/platform/audio";
 import { GAME_WIDTH, GAME_HEIGHT } from "../config/balance";
 
 const BRICK_BLAST_MODES: GameModeOption[] = [
@@ -274,7 +275,10 @@ export default function BrickBlastGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -282,7 +286,10 @@ export default function BrickBlastGame({
 
             <button
               type="button"
-              onClick={handleRestart}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleRestart();
+              }}
               className="px-3.5 py-1 text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] bg-white sm:hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] rounded-lg transition shadow-xs cursor-pointer"
             >
               Reset
@@ -292,7 +299,10 @@ export default function BrickBlastGame({
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={handleReturnToModes}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleReturnToModes();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               ← Modes
@@ -300,7 +310,10 @@ export default function BrickBlastGame({
 
             <button
               type="button"
-              onClick={handleRestart}
+              onClick={() => {
+                soundManager.play("buttonClick");
+                handleRestart();
+              }}
               className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
             >
               Play Again
