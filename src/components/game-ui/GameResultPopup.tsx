@@ -45,7 +45,7 @@ export function GameResultPopup({
     <div
       role="dialog"
       aria-label="Game Result"
-      className="absolute z-20 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[88%] max-w-[260px]"
+      className="absolute z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[88%] max-w-[260px]"
     >
       <div className="w-full p-4 bg-white rounded-2xl border border-[#e6e3dc] shadow-lg flex flex-col gap-3 result-popup-card">
         {/* Top Header Row */}

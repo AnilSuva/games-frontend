@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { GameHostProps, GameMode } from "@/games/common/types";
 
-export type GameCategory = "board" | "arcade";
+export type GameCategory = "board" | "arcade" | "random-royale";
 export type GameEngine = "react-dom" | "phaser";
 export type GameStatus = "available" | "coming-soon";
 export type GameOrientation = "portrait" | "landscape" | "any";
@@ -24,6 +24,8 @@ export interface GameMetadata {
   iconName: string;
   badgeText?: string;
   tags: string[];
+  /** Whether the game is visible in the public catalog / landing page */
+  isVisible?: boolean;
 }
 
 /**

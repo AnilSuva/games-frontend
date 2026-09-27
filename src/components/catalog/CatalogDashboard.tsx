@@ -60,7 +60,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
       {/* Filter and Search Controls */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         {/* Category Pills */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => handleSelectTab("all")}
@@ -93,6 +93,17 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
             }`}
           >
             Arcade
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectTab("random-royale")}
+            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              activeTab === "random-royale"
+                ? "bg-[#1c1917] text-white shadow-sm"
+                : "bg-white border border-[#e6e3dc] text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:border-[#d2cecd] active:bg-[#f0eee9]"
+            }`}
+          >
+            Random Royale
           </button>
         </div>
 

@@ -10,6 +10,7 @@ import { consumeStartingPlayer } from "@/games/common/startingPlayer";
 import { TicTacToeCell } from "./TicTacToeCell";
 import { WinningStrike } from "./WinningStrike";
 import { soundManager } from "@/platform/audio";
+import { createResultSoundGuard, getResultSound } from "@/games/common/resultSound";
 
 interface SessionConfig {
   mode: "1v1" | "vs-bot";
@@ -74,6 +75,11 @@ export default function TicTacToeGame({
 
   const [state, dispatch] = useReducer(ticTacToeReducer, undefined, createInitialState);
   const botAbortControllerRef = useRef<AbortController | null>(null);
+  const resultSoundGuardRef = useRef(createResultSoundGuard());
+
+  useEffect(() => {
+    void soundManager.preloadResultSounds();
+  }, []);
 
   // Initial lifecycle synchronization
   useEffect(() => {
@@ -106,6 +112,7 @@ export default function TicTacToeGame({
   // Starts a fresh match preserving the current mode and difficulty configuration
   const startFreshMatch = useCallback(() => {
     botAbortControllerRef.current?.abort();
+    resultSoundGuardRef.current.reset();
     const starter = consumeStartingPlayer("tic-tac-toe");
     const startingPlayer = starter === "orange" ? "X" : "O";
     dispatch({ type: "RESET", startingPlayer });
@@ -120,6 +127,7 @@ export default function TicTacToeGame({
   const handleSelectMode = useCallback(
     (modeId: string) => {
       botAbortControllerRef.current?.abort();
+      resultSoundGuardRef.current.reset();
       if (modeId === "1v1") {
         setSessionConfig({ mode: "1v1", difficulty: "medium" });
       }
@@ -138,6 +146,7 @@ export default function TicTacToeGame({
   const handleSelectConfiguredMode = useCallback(
     (_modeId: string, configValue: string) => {
       botAbortControllerRef.current?.abort();
+      resultSoundGuardRef.current.reset();
       setSessionConfig({
         mode: "vs-bot",
         difficulty: configValue as BotDifficulty,
@@ -175,6 +184,16 @@ export default function TicTacToeGame({
   // Synchronize game over to external platform callbacks
   useEffect(() => {
     if (state.status === "won" || state.status === "draw") {
+      const resultSound = resultSoundGuardRef.current.claim(
+        getResultSound({
+          mode: sessionConfig.mode,
+          winner: state.winner,
+          humanPlayer: "X",
+        })
+      );
+      if (resultSound === "victory") soundManager.playVictory();
+      if (resultSound === "lose") soundManager.playLose();
+
       onLifecycleChange?.("finished");
       const score = state.winner === "X" ? 100 : state.winner === "O" ? 0 : 50;
       onScoreUpdate?.(score);
@@ -274,7 +293,7 @@ export default function TicTacToeGame({
       </div>
 
       {/* 3x3 Board with SVG Winning Line Strike-Through */}
-      <div className="relative w-full max-w-[340px] sm:max-w-[380px] aspect-square">
+      <div className="active-board-square relative aspect-square">
         <div
           className="w-full h-full p-2.5 sm:p-3 bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm grid grid-cols-3 gap-2.5 sm:gap-3"
           role="grid"

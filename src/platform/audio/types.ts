@@ -14,3 +14,4 @@ export interface IAudioService {
 export interface ISoundManager {
   play: (name: import("./config").SoundEffectName) => void;
 }
+ 

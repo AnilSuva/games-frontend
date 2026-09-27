@@ -13,14 +13,14 @@ export function ConnectFourCell({ value, isWinningCell }: ConnectFourCellProps) 
 
   const cellClasses = [
     "relative w-full aspect-square rounded-full transition-all duration-100",
-    isWinningCell ? "ring-2 ring-[#1c1917] ring-offset-1" : "",
+    isWinningCell ? "ring-2 ring-[#1c1917] ring-offset-1 z-30" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const innerClasses = [
     "w-full h-full rounded-full",
-    !value ? "bg-white border-2 border-[#e6e3dc] group-hover:border-[#c8c4bc] shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)] transition-colors" : "",
+    !value ? "bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]" : "",
     isOrange ? "bg-[#e0530a] shadow-[0_1px_2px_rgba(0,0,0,0.15)]" : "",
     isBlue ? "bg-[#2563eb] shadow-[0_1px_2px_rgba(0,0,0,0.15)]" : "",
   ]

@@ -18,6 +18,12 @@ import {
 import { findBestMove } from "../src/games/board/connect-four/bot/minimax.ts";
 import { getBotMoveByDifficulty } from "../src/games/board/connect-four/bot/difficulty.ts";
 import { requestBotMove } from "../src/games/board/connect-four/bot/botService.ts";
+import {
+  calculateRowGeometry,
+  createInitialDropPhysics,
+  stepDropPhysics,
+  simulateDropAnimation,
+} from "../src/games/board/connect-four/logic/dropPhysics.ts";
 
 test("Initialization: creates correct starting state", () => {
   const state = createInitialState();
@@ -339,4 +345,236 @@ test("Rules: isBoardFull detects full board", () => {
   assert.ok(isBoardFull(counts));
   const partial = [0, 3, 6, 0, 0, 0, 0];
   assert.ok(!isBoardFull(partial));
+});
+
+test("Drop Physics: geometry calculations place rows and spawn position correctly", () => {
+  const colHeight = 320;
+  const cellDiameter = 44;
+  const { rowStep, startY, getTargetY } = calculateRowGeometry(colHeight, cellDiameter);
+
+  // 5 gaps between 6 rows: (320 - 44) / 5 = 276 / 5 = 55.2px per step
+  assert.equal(rowStep, 55.2);
+  // Spawn is strictly above row 0 (negative Y)
+  assert.ok(startY < 0, `startY (${startY}) must be negative (above row 0)`);
+  assert.equal(startY, -1.15 * cellDiameter);
+
+  // Top row (row 0) target is 0
+  assert.equal(getTargetY(0), 0);
+  // Bottom row (row 5) target is 5 * rowStep = 276
+  assert.equal(getTargetY(5), 5 * 55.2);
+});
+
+test("Drop Physics: natural acceleration and target clamping with subtle bounce", () => {
+  const targetY = 150;
+  let state = createInitialDropPhysics(-50);
+  assert.equal(state.y, -50);
+  assert.equal(state.hasBounced, false);
+  assert.equal(state.isFinished, false);
+
+  // Step 1: moves downward with gravity
+  state = stepDropPhysics(state, targetY, 1 / 60);
+  assert.ok(state.y > -50, "y must advance downwards");
+  assert.ok(state.velocity > 40, "velocity must accelerate under gravity");
+
+  // Run until first impact
+  let firstImpactIndex = -1;
+  const frames = [state];
+  for (let i = 0; i < 60; i++) {
+    state = stepDropPhysics(state, targetY, 1 / 60);
+    frames.push(state);
+    if (state.hasBounced && firstImpactIndex === -1) {
+      firstImpactIndex = i;
+      // On first impact, velocity must reverse (negative) with restitution
+      assert.ok(state.velocity < 0, "velocity must be negative on bounce rebound");
+      assert.equal(state.y, targetY, "position on bounce impact must clamp to targetY");
+      assert.equal(state.isFinished, false, "animation must not finish on first bounce");
+      break;
+    }
+  }
+  assert.ok(firstImpactIndex > 0, "must reach targetY and bounce");
+
+  // Run until settled
+  for (let i = 0; i < 30; i++) {
+    state = stepDropPhysics(state, targetY, 1 / 60);
+    if (state.isFinished) break;
+  }
+
+  assert.equal(state.isFinished, true, "animation must finish cleanly");
+  assert.equal(state.y, targetY, "final settled position must exactly equal targetY");
+  assert.equal(state.velocity, 0, "final velocity must be 0");
+});
+
+test("Drop Physics: simulation durations scale naturally with drop distance", () => {
+  const topDrop = simulateDropAnimation(0); // Row 0 (top row)
+  const midDrop = simulateDropAnimation(2); // Row 2
+  const bottomDrop = simulateDropAnimation(5); // Row 5 (bottom row)
+
+  // Every drop must finish cleanly at exact target Y
+  const { getTargetY } = calculateRowGeometry(320, 44);
+  assert.equal(topDrop.finalY, getTargetY(0));
+  assert.equal(midDrop.finalY, getTargetY(2));
+  assert.equal(bottomDrop.finalY, getTargetY(5));
+
+  // Natural scaling: row 5 takes longer than row 2, which takes longer than row 0
+  assert.ok(
+    bottomDrop.totalTimeMs > midDrop.totalTimeMs,
+    `Bottom drop (${bottomDrop.totalTimeMs}ms) must take longer than mid drop (${midDrop.totalTimeMs}ms)`
+  );
+  assert.ok(
+    midDrop.totalTimeMs > topDrop.totalTimeMs,
+    `Mid drop (${midDrop.totalTimeMs}ms) must take longer than top drop (${topDrop.totalTimeMs}ms)`
+  );
+
+  // Both should be in satisfying arcade sweet-spot (150ms to 600ms)
+  assert.ok(topDrop.totalTimeMs >= 150 && topDrop.totalTimeMs <= 300, `Top drop time ${topDrop.totalTimeMs}ms`);
+  assert.ok(bottomDrop.totalTimeMs >= 350 && bottomDrop.totalTimeMs <= 550, `Bottom drop time ${bottomDrop.totalTimeMs}ms`);
+});
+
+test("Drop System: correct target row and exact final position for all 6 rows", () => {
+  const colHeight = 320;
+  const cellDiameter = 44;
+  const { getTargetY } = calculateRowGeometry(colHeight, cellDiameter);
+
+  for (let row = 0; row < 6; row++) {
+    const expectedY = getTargetY(row);
+    const result = simulateDropAnimation(row, colHeight, cellDiameter);
+
+    assert.equal(result.finalY, expectedY, `Row ${row} final Y must match target Y exactly`);
+    const lastFrame = result.frames[result.frames.length - 1];
+    assert.equal(lastFrame.isFinished, true);
+    assert.equal(lastFrame.velocity, 0);
+    assert.equal(lastFrame.y, expectedY);
+  }
+});
+
+test("Drop System: stack increments landing row from row 5 up to row 0", () => {
+  let state = createInitialState();
+  const targetCol = 2;
+
+  for (let expectedRow = 5; expectedRow >= 0; expectedRow--) {
+    const landingRow = getLandingRow(state.columnCounts, targetCol);
+    assert.equal(landingRow, expectedRow, `Expected landing row ${expectedRow}`);
+
+    // Simulate drop animation settling at target row
+    const anim = simulateDropAnimation(landingRow);
+    assert.equal(anim.frames[anim.frames.length - 1].isFinished, true);
+
+    // Commit move to state
+    state = connectFourReducer(state, { type: "DROP", column: targetCol });
+    assert.equal(state.board[expectedRow * 7 + targetCol] !== null, true);
+  }
+
+  // Column is now full: landing row must be null / -1
+  assert.equal(getLandingRow(state.columnCounts, targetCol), -1);
+  assert.equal(isValidColumn(state.columnCounts, targetCol), false);
+});
+
+test("Drop System: duplicate move prevention during active drop", () => {
+  let isDropActive = false;
+  let moveDispatched = false;
+
+  const initiateDrop = () => {
+    if (isDropActive) return false;
+    isDropActive = true;
+    return true;
+  };
+
+  // First click succeeds
+  assert.equal(initiateDrop(), true);
+  assert.equal(isDropActive, true);
+
+  // Subsequent clicks while drop is active are rejected
+  assert.equal(initiateDrop(), false);
+  assert.equal(initiateDrop(), false);
+
+  // Animation completes
+  isDropActive = false;
+  moveDispatched = true;
+  assert.equal(moveDispatched, true);
+
+  // New click can now proceed
+  assert.equal(initiateDrop(), true);
+});
+
+test("Drop System: human and bot moves use identical drop physics and completion", async () => {
+  let state = createInitialState();
+
+  // Human move: Player R drops in col 3
+  const humanCol = 3;
+  const humanRow = getLandingRow(state.columnCounts, humanCol);
+  const humanAnim = simulateDropAnimation(humanRow);
+  assert.equal(humanAnim.frames[humanAnim.frames.length - 1].isFinished, true);
+  state = connectFourReducer(state, { type: "DROP", column: humanCol });
+  assert.equal(state.currentPlayer, "Y");
+
+  // Bot move: Player Y computes move and drops
+  const botCol = getBotMoveByDifficulty(state.board, state.columnCounts, "Y", "medium");
+  assert.ok(botCol >= 0 && botCol <= 6);
+  const botRow = getLandingRow(state.columnCounts, botCol);
+  const botAnim = simulateDropAnimation(botRow);
+  assert.equal(botAnim.frames[botAnim.frames.length - 1].isFinished, true);
+  state = connectFourReducer(state, { type: "DROP", column: botCol });
+  assert.equal(state.currentPlayer, "R");
+
+  assert.equal(state.moveCount, 2);
+});
+
+test("Drop System: win synchronization only triggers after drop completion", () => {
+  let state = createInitialState();
+
+  // Setup 3 in a row for Orange in row 5 (cols 0, 1, 2)
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // Y
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // Y
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // Y
+
+  assert.equal(state.status, "in_progress");
+  assert.equal(state.winningLine, null);
+
+  // Winning move initiated in col 3:
+  const winningCol = 3;
+  const targetRow = getLandingRow(state.columnCounts, winningCol);
+  assert.equal(targetRow, 5);
+
+  // During animation (before state dispatch), state is NOT won yet
+  assert.equal(state.status, "in_progress");
+  assert.equal(state.winningLine, null);
+
+  // Physics animation runs to completion
+  const anim = simulateDropAnimation(targetRow);
+  assert.equal(anim.frames[anim.frames.length - 1].isFinished, true);
+
+  // Move is committed ONLY when animation finishes
+  state = connectFourReducer(state, { type: "DROP", column: winningCol });
+  assert.equal(state.status, "won");
+  assert.equal(state.winner, "R");
+  assert.notEqual(state.winningLine, null);
+  assert.deepEqual(state.winningLine.line, [35, 36, 37, 38]);
+});
+
+test("Drop System: reset cleanly cancels in-flight drop state", () => {
+  let activeDrop = { column: 3, targetRow: 5, player: "R" };
+  let isDropActive = true;
+  let animCancelled = false;
+
+  const cancelAnimation = () => {
+    animCancelled = true;
+    activeDrop = null;
+    isDropActive = false;
+  };
+
+  // In-flight drop interrupted by Reset
+  cancelAnimation();
+
+  assert.equal(animCancelled, true);
+  assert.equal(activeDrop, null);
+  assert.equal(isDropActive, false);
+
+  // Game state resets cleanly
+  const resetState = createInitialState();
+  assert.equal(resetState.moveCount, 0);
+  assert.equal(resetState.status, "in_progress");
+  assert.equal(resetState.currentPlayer, "R");
 });

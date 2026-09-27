@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getGameMetadata, getAllAvailableGameIds } from "@/platform/registry";
 import { GameContainer } from "@/components/game-host/GameContainer";
+import { SpinWheel } from "@/games/random-royale/spin-wheel";
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>;
@@ -47,8 +48,12 @@ export default async function GamePage({ params }: GamePageProps) {
     notFound();
   }
 
+  if (game.id === "spin-wheel") {
+    return <SpinWheel />;
+  }
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-6 w-full max-w-5xl mx-auto">
+    <div className="active-game-page flex-1 flex min-h-0 flex-col w-full">
       <GameContainer game={game} />
     </div>
   );

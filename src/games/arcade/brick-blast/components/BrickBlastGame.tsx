@@ -7,6 +7,7 @@ import { GameResultPopup } from "@/components/game-ui/GameResultPopup";
 import { consumeStartingPlayer, type PlatformPlayer } from "@/games/common/startingPlayer";
 import { soundManager } from "@/platform/audio";
 import { GAME_WIDTH, GAME_HEIGHT } from "../config/balance";
+import { createResultSoundGuard, getResultSound } from "@/games/common/resultSound";
 
 const BRICK_BLAST_MODES: GameModeOption[] = [
   { id: "1v1", label: "1v1", description: "Local 2-Player" },
@@ -54,6 +55,7 @@ export default function BrickBlastGame({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const phaserGameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<import("../game/BrickBlastScene").BrickBlastScene | null>(null);
+  const resultSoundGuardRef = useRef(createResultSoundGuard());
 
   const [inModeSelection, setInModeSelection] = useState<boolean>(true);
   const [selectedMode, setSelectedMode] = useState<"1v1" | "vs-bot">("1v1");
@@ -70,9 +72,14 @@ export default function BrickBlastGame({
     onTurnChange?.(null);
   }, [onLifecycleChange, onTurnChange]);
 
+  useEffect(() => {
+    void soundManager.preloadResultSounds();
+  }, []);
+
   const handleSelectMode = useCallback(
     (modeId: string) => {
       if (modeId === "1v1") {
+        resultSoundGuardRef.current.reset();
         setSelectedMode("1v1");
         setInModeSelection(false);
         setShowResultPopup(false);
@@ -86,6 +93,7 @@ export default function BrickBlastGame({
   );
 
   const handleReturnToModes = useCallback(() => {
+    resultSoundGuardRef.current.reset();
     if (phaserGameRef.current) {
       phaserGameRef.current.destroy(true);
       phaserGameRef.current = null;
@@ -102,6 +110,7 @@ export default function BrickBlastGame({
 
   const handleRestart = useCallback(() => {
     const nextStarter = consumeStartingPlayer("brick-blast");
+    resultSoundGuardRef.current.reset();
     setShowResultPopup(false);
     setIsPopupDismissed(false);
     setGameOverResult(null);
@@ -112,6 +121,7 @@ export default function BrickBlastGame({
 
   const handleSelectConfiguredMode = useCallback((modeId: string, value: string) => {
     if (modeId !== "bot") return;
+    resultSoundGuardRef.current.reset();
     setSelectedMode("vs-bot");
     setBotDifficulty(value === "easy" || value === "hard" ? value : "medium");
     setInModeSelection(false);
@@ -173,6 +183,16 @@ export default function BrickBlastGame({
             },
             onGameOver: (result: { winner: PlatformPlayer; score: number }) => {
               if (!isMounted) return;
+              const resultSound = resultSoundGuardRef.current.claim(
+                getResultSound({
+                  mode: selectedMode,
+                  winner: result.winner,
+                  humanPlayer: "orange",
+                })
+              );
+              if (resultSound === "victory") soundManager.playVictory();
+              if (resultSound === "lose") soundManager.playLose();
+
               setGameOverResult(result);
               setShowResultPopup(true);
               onGameOver({
@@ -251,7 +271,7 @@ export default function BrickBlastGame({
   return (
     <div className="flex flex-col items-center w-full gap-2 select-none">
       {/* 2-Player Arena Container (maximizes vertical mobile viewport, zero clutter) */}
-      <div className="relative w-full max-w-[380px] h-[calc(100dvh-130px)] sm:h-[600px] max-h-[640px] aspect-[360/580] rounded-2xl overflow-hidden border border-[#e6e3dc] shadow-sm bg-[#faf9f6]">
+      <div className="active-board-brick relative aspect-[360/580] overflow-hidden bg-[#faf9f6]">
         <div
           ref={containerRef}
           className="w-full h-full touch-none"

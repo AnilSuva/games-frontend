@@ -1,6 +1,7 @@
 import {
   SOUND_CONFIG,
   SOUND_FILES,
+  SPIN_TICK_SOUND_NAMES,
   getSoundVolume,
   type SoundConfig,
   type SoundEffectName,
@@ -22,6 +23,10 @@ class SoundManager {
   private audioPools: Map<SoundEffectName, HTMLAudioElement[]> = new Map();
   private poolPointers: Map<SoundEffectName, number> = new Map();
   private isUnlocked = false;
+  private webAudioContext: AudioContext | null = null;
+  private decodedAudioBuffers: Map<SoundEffectName, AudioBuffer> = new Map();
+  private decodedSoundPreloads: Map<string, Promise<void>> = new Map();
+  private activeSpinTickSources = new Set<AudioBufferSourceNode>();
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -39,6 +44,12 @@ class SoundManager {
 
       // Prime the button-click pool on user interaction so audio plays with zero latency
       this.warmPool("buttonClick");
+      const context = this.webAudioContext;
+      if (context?.state === "suspended") {
+        void context.resume().catch(() => {
+          // An interrupted gesture can leave the context suspended until the next tap.
+        });
+      }
 
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
@@ -100,6 +111,7 @@ class SoundManager {
     }
 
     try {
+      targetAudio.muted = false;
       targetAudio.volume = volume;
       targetAudio.currentTime = 0;
       targetAudio.play().catch(() => {
@@ -108,6 +120,134 @@ class SoundManager {
     } catch {
       // Ignored for non-interactive or background environments
     }
+  }
+
+  private getWebAudioContext(): AudioContext | null {
+    if (typeof window === "undefined") return null;
+    if (this.webAudioContext) return this.webAudioContext;
+
+    const ContextConstructor = window.AudioContext || (
+      window as Window & { webkitAudioContext?: typeof AudioContext }
+    ).webkitAudioContext;
+    if (!ContextConstructor) return null;
+
+    try {
+      this.webAudioContext = new ContextConstructor();
+      return this.webAudioContext;
+    } catch {
+      return null;
+    }
+  }
+
+  private preloadDecodedSounds(
+    cacheKey: string,
+    names: readonly SoundEffectName[]
+  ): Promise<void> {
+    const existingPreload = this.decodedSoundPreloads.get(cacheKey);
+    if (existingPreload) return existingPreload;
+
+    const context = this.getWebAudioContext();
+    if (!context || typeof window === "undefined") {
+      return Promise.resolve();
+    }
+
+    const preload = Promise.all(
+      names.map(async (name) => {
+        if (this.decodedAudioBuffers.has(name)) return;
+        const response = await fetch(SOUND_FILES[name]);
+        if (!response.ok) throw new Error(`Unable to load ${name}.`);
+        const audioData = await response.arrayBuffer();
+        const buffer = await context.decodeAudioData(audioData);
+        this.decodedAudioBuffers.set(name, buffer);
+      })
+    ).then(() => undefined).catch(() => undefined);
+    this.decodedSoundPreloads.set(cacheKey, preload);
+    return preload;
+  }
+
+  /** Fetches and decodes all wheel ticks once, before any boundary can be reached. */
+  public preloadSpinTicks(): Promise<void> {
+    return this.preloadDecodedSounds("spin-ticks", SPIN_TICK_SOUND_NAMES);
+  }
+
+  /** Fetches and decodes match result sounds before a match can finish. */
+  public preloadResultSounds(): Promise<void> {
+    return this.preloadDecodedSounds("match-results", ["victory", "lose"]);
+  }
+
+  /** Resumes preloaded match-result audio during a user gesture that starts a match. */
+  public prepareResultSounds(): void {
+    const context = this.getWebAudioContext();
+    void this.preloadResultSounds();
+    if (context?.state === "suspended") {
+      void context.resume().catch(() => {
+        // Browsers can reject a resume after an interrupted user gesture.
+      });
+    }
+  }
+
+  /** Resumes the preloaded Web Audio context inside the user's Spin gesture. */
+  public prepareSpinTicks(): Promise<void> {
+    const context = this.getWebAudioContext();
+    const preload = this.preloadSpinTicks();
+    const resume = context?.state === "suspended"
+      ? context.resume().catch(() => undefined)
+      : Promise.resolve();
+    return Promise.all([preload, resume]).then(() => undefined);
+  }
+
+  /** Stops pooled wheel ticks when a spin is cancelled or restarted. */
+  public stopSpinTicks(): void {
+    for (const source of this.activeSpinTickSources) {
+      try {
+        source.stop();
+      } catch {
+        // A source may already have reached the end of its small buffer.
+      }
+    }
+    this.activeSpinTickSources.clear();
+  }
+
+  public playSpinTick(tickNumber: number): void {
+    if (!Number.isInteger(tickNumber) || tickNumber < 1 || tickNumber > SPIN_TICK_SOUND_NAMES.length) {
+      return;
+    }
+
+    const name = SPIN_TICK_SOUND_NAMES[tickNumber - 1];
+    this.playDecodedSound(name, this.activeSpinTickSources);
+  }
+
+  private playDecodedSound(
+    name: SoundEffectName,
+    activeSources?: Set<AudioBufferSourceNode>
+  ): boolean {
+    const context = this.webAudioContext;
+    const buffer = this.decodedAudioBuffers.get(name);
+    if (!context || context.state !== "running" || !buffer) return false;
+
+    try {
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      source.buffer = buffer;
+      gain.gain.setValueAtTime(getSoundVolume(name), context.currentTime);
+      source.connect(gain).connect(context.destination);
+      if (activeSources) {
+        activeSources.add(source);
+        source.onended = () => activeSources.delete(source);
+      }
+      source.start();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public playVictory(): void {
+    if (!this.playDecodedSound("victory")) this.play("victory");
+  }
+
+  public playLose(): void {
+    if (!this.playDecodedSound("lose")) this.play("lose");
   }
 
   // ─── Phaser 3 Integration Helpers ──────────────────────────────────────────

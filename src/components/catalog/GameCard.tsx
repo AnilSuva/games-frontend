@@ -60,6 +60,15 @@ function GameIllustration({ id }: { id: string }) {
           </div>
         </div>
       );
+    case "spin-wheel":
+      return (
+        <div className="flex h-24 w-full items-center justify-center rounded-lg border border-[#eeece6] bg-[#faf9f6]">
+          <div className="relative h-16 w-16 rounded-full border-[3px] border-white shadow-sm" style={{ background: "conic-gradient(#F3B768 0deg 45deg,#99C7C4 45deg 90deg,#E78C72 90deg 135deg,#A8B7D8 135deg 180deg,#E6C777 180deg 225deg,#9CBF91 225deg 270deg,#D7A3B6 270deg 315deg,#B5A7D5 315deg)" }}>
+            <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[9px] border-x-transparent border-t-[#1c1917]" />
+            <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#1c1917]" />
+          </div>
+        </div>
+      );
     case "chess":
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center">
@@ -91,11 +100,12 @@ function GameIllustration({ id }: { id: string }) {
 
 export function GameCard({ game }: GameCardProps) {
   const isAvailable = game.status === "available";
+  const href = `/games/${game.id}`;
 
   const CardWrapper = isAvailable ? Link : "div";
   const wrapperProps = isAvailable
     ? {
-        href: `/games/${game.id}`,
+        href,
         onClick: () => soundManager.play("buttonClick"),
         className:
           "group flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917]",
@@ -115,7 +125,7 @@ export function GameCard({ game }: GameCardProps) {
         {/* Metadata & Title */}
         <div className="mt-3.5 flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium text-[#6b665f] tracking-wide">
-            {game.category === "board" ? "Board Game" : "Arcade"}
+            {game.category === "board" ? "Board Game" : game.category === "arcade" ? "Arcade" : "Random Royale"}
           </span>
 
           {!isAvailable ? (
@@ -140,7 +150,7 @@ export function GameCard({ game }: GameCardProps) {
 
       {/* Subtle footer */}
       <div className="mt-4 pt-3 border-t border-[#f0eee9] flex items-center justify-between text-[11px] text-[#9c978e]">
-        <span>{game.engine === "react-dom" ? "Turn-based" : "2D Physics"}</span>
+        <span>{game.id === "spin-wheel" ? "Random selection" : game.engine === "react-dom" ? "Turn-based" : "2D Physics"}</span>
         <span className="flex items-center gap-1">
           {game.supportedModes.includes("pvp-bot") && <span>• Solo Bot</span>}
           {game.supportedModes.includes("local-2p") && <span>• 2-Player</span>}

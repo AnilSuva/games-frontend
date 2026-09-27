@@ -27,6 +27,128 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+body:has(.active-game-page) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body:has(.active-game-page) > header,
+body:has(.active-game-page) > footer {
+  display: none;
+}
+
+body:has(.active-game-page) > main {
+  min-height: 0;
+  overflow: hidden;
+}
+
+body:has(.spin-wheel-page) {
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body:has(.spin-wheel-page) > main {
+  min-height: auto;
+  overflow: visible;
+  flex: 1 0 auto;
+}
+
+.spin-wheel-page {
+  min-height: 100dvh;
+  flex: 1 0 auto;
+}
+
+.spin-wheel-page > .active-game-shell {
+  min-height: 100dvh;
+  flex: 0 0 auto;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.spin-wheel-page .active-game-stage {
+  display: block;
+  min-height: 0;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.active-game-page > .active-game-shell {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.active-game-header {
+  padding-top: env(safe-area-inset-top);
+  height: calc(3.5rem + env(safe-area-inset-top));
+}
+
+.active-game-stage > :not(.active-turn-atmosphere) {
+  z-index: 1;
+}
+
+.active-turn-atmosphere {
+  z-index: 0;
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: min(100%, 1100px);
+  height: min(100%, 1100px);
+  transform: translate(-50%, -50%);
+  border-radius: 1.5rem;
+}
+
+/* Scale the games from the space the stage actually has. Board proportions stay fixed. */
+.active-board-square {
+  width: min(88vw, 68dvh, 960px);
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.active-board-connect {
+  width: min(92vw, 79.33dvh, 1400px);
+  max-width: 100%;
+  aspect-ratio: 7 / 6;
+  flex: 0 1 auto;
+}
+
+.active-board-brick {
+  width: min(96vw, 790px, 50.9dvh);
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+@media (max-height: 520px) {
+  .active-board-square { width: min(72vw, 68dvh, 960px); }
+  .active-board-connect { width: min(88vw, 79.33dvh, 1400px); }
+  .active-board-brick { width: min(72vw, 790px, 48.4dvh); }
+}
+
+.active-game-stage:has(canvas) .active-turn-atmosphere {
+  display: none;
+}
+
+.active-game-stage > .flex.flex-col.items-center {
+  width: 100%;
+  max-height: 100%;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.active-game-stage .min-h-\[32px\] {
+  display: none;
+}
+
+.active-game-stage [role="grid"] {
+  box-shadow: none;
+}
+
+.spin-wheel-svg {
+  transform-origin: center;
+}
+
 /* Subtle, tactile card elevation */
 .tactile-card {
   background-color: var(--card-bg);

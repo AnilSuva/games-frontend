@@ -36,7 +36,7 @@ export function WinningLine({ winningLine, winner }: WinningLineProps) {
 
   return (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none z-10 p-2 sm:p-3"
+      className="absolute inset-0 w-full h-full pointer-events-none z-30 p-2 sm:p-3"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       aria-hidden="true"
