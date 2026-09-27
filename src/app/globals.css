@@ -1,26 +1,79 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f7f6f2; /* Warm soft ivory */
+  --foreground: #1c1917; /* Dark charcoal */
+  --card-bg: #ffffff;
+  --card-border: #e6e3dc;
+  --card-border-hover: #d2cecd;
+  --muted: #6b665f;
+  --subtle-bg: #eeece6;
+  
+  /* Player Accent Colors */
+  --player-1: #e0530a;       /* Warm energetic Orange */
+  --player-1-light: #fff7ed; /* Soft Orange tint */
+  --player-1-border: #fed7aa;
+  
+  --player-2: #2563eb;       /* Confident deep Blue */
+  --player-2-light: #eff6ff; /* Soft Blue tint */
+  --player-2-border: #bfdbfe;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Subtle, tactile card elevation */
+.tactile-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.03);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tactile-card:hover {
+    border-color: var(--card-border-hover);
+    box-shadow: 0 4px 12px 0 rgba(28, 25, 23, 0.05);
+  }
+}
+
+.tactile-btn {
+  transition: transform 0.1s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tactile-btn:active {
+  transform: scale(0.98);
+}
+
+/* Focus styles: calm, precise, non-glowing */
+*:focus-visible {
+  outline: 2px solid #1c1917;
+  outline-offset: 2px;
+}
+
+/* Prevent unwanted mobile text selection during game interactions */
+.select-none {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Ensure buttons have pointer cursor on pointer-capable devices */
+button, [role="button"] {
+  cursor: pointer;
+}
+
+button:disabled, [role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Guard against Android Chrome sticky hover: on touch-only devices, do not latch hover states */
+@media (hover: none) and (pointer: coarse) {
+  *:hover {
+    transition: none !important;
+  }
 }
