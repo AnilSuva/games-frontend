@@ -13,8 +13,13 @@ const BRICK_BLAST_MODES: GameModeOption[] = [
     id: "bot",
     label: "Bot",
     description: "vs AI Computer",
-    disabled: true,
-    disabledBadge: "Coming Soon",
+    config: {
+      title: "Brick Blast Bot",
+      subtitle: "Choose your opponent difficulty",
+      values: ["easy", "medium", "hard"],
+      defaultValue: "medium",
+      startLabel: "Start Match",
+    },
   },
   {
     id: "multiplayer",
@@ -50,6 +55,8 @@ export default function BrickBlastGame({
   const sceneRef = useRef<import("../game/BrickBlastScene").BrickBlastScene | null>(null);
 
   const [inModeSelection, setInModeSelection] = useState<boolean>(true);
+  const [selectedMode, setSelectedMode] = useState<"1v1" | "vs-bot">("1v1");
+  const [botDifficulty, setBotDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [showResultPopup, setShowResultPopup] = useState<boolean>(false);
   const [isPopupDismissed, setIsPopupDismissed] = useState<boolean>(false);
   const [gameOverResult, setGameOverResult] = useState<{
@@ -65,6 +72,7 @@ export default function BrickBlastGame({
   const handleSelectMode = useCallback(
     (modeId: string) => {
       if (modeId === "1v1") {
+        setSelectedMode("1v1");
         setInModeSelection(false);
         setShowResultPopup(false);
         setIsPopupDismissed(false);
@@ -82,6 +90,7 @@ export default function BrickBlastGame({
       phaserGameRef.current = null;
     }
     sceneRef.current = null;
+    setSelectedMode("1v1");
     setInModeSelection(true);
     setShowResultPopup(false);
     setIsPopupDismissed(false);
@@ -95,7 +104,19 @@ export default function BrickBlastGame({
     setShowResultPopup(false);
     setIsPopupDismissed(false);
     setGameOverResult(null);
-    sceneRef.current?.restartMatch(nextStarter, "1v1");
+    sceneRef.current?.restartMatch(nextStarter, selectedMode, botDifficulty);
+    onLifecycleChange?.("playing");
+    onScoreUpdate?.(0);
+  }, [botDifficulty, onLifecycleChange, onScoreUpdate, selectedMode]);
+
+  const handleSelectConfiguredMode = useCallback((modeId: string, value: string) => {
+    if (modeId !== "bot") return;
+    setSelectedMode("vs-bot");
+    setBotDifficulty(value === "easy" || value === "hard" ? value : "medium");
+    setInModeSelection(false);
+    setShowResultPopup(false);
+    setIsPopupDismissed(false);
+    setGameOverResult(null);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
   }, [onLifecycleChange, onScoreUpdate]);
@@ -126,6 +147,9 @@ export default function BrickBlastGame({
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
+        input: {
+          activePointers: 3,
+        },
       };
 
       gameInstance = new Phaser.Game(config);
@@ -136,7 +160,8 @@ export default function BrickBlastGame({
 
         const scene = gameInstance.scene.add("BrickBlastScene", BrickBlastScene, true, {
           startingPlayer,
-          mode: "1v1",
+          mode: selectedMode,
+          difficulty: botDifficulty,
           callbacks: {
             onScoreUpdate: (score: number) => {
               if (!isMounted) return;
@@ -154,7 +179,7 @@ export default function BrickBlastGame({
                 score: result.score,
                 details: {
                   winnerColor: result.winner,
-                  mode: "1v1",
+                  mode: selectedMode,
                   game: "brick-blast",
                 },
               });
@@ -189,7 +214,7 @@ export default function BrickBlastGame({
       }
       sceneRef.current = null;
     };
-  }, [inModeSelection, handleRestart, onGameOver, onLifecycleChange, onReady, onScoreUpdate]);
+  }, [inModeSelection, selectedMode, botDifficulty, handleRestart, onGameOver, onLifecycleChange, onReady, onScoreUpdate]);
 
   if (inModeSelection) {
     return (
@@ -197,7 +222,7 @@ export default function BrickBlastGame({
         gameTitle="Brick Blast"
         modes={BRICK_BLAST_MODES}
         onSelectMode={handleSelectMode}
-        onSelectConfiguredMode={() => {}}
+        onSelectConfiguredMode={handleSelectConfiguredMode}
         onScreenChange={(screen) =>
           onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
         }

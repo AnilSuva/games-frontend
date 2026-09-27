@@ -15,6 +15,61 @@ import {
   GAME_WIDTH,
 } from "../src/games/arcade/brick-blast/config/balance.ts";
 import { ALL_POWER_UP_TYPES } from "../src/games/arcade/brick-blast/config/powerUps.ts";
+import {
+  BrickBlastBotController,
+  clampBotTarget,
+  predictWallReflectedX,
+  selectThreateningBall,
+} from "../src/games/arcade/brick-blast/game/botController.ts";
+
+const botBall = (id, { x = 180, y = 300, vx = 0, vy = -200, radius = 6, active = true } = {}) =>
+  ({ id, x, y, vx, vy, radius, active });
+
+test("Bot targeting: selects the incoming ball with the shortest paddle arrival time", () => {
+  const farther = botBall(1, { y: 300, vy: -100 });
+  const imminent = botBall(2, { y: 100, vy: -300 });
+  const movingAway = botBall(3, { y: 60, vy: 180 });
+  assert.equal(selectThreateningBall([farther, movingAway, imminent], 46), imminent);
+});
+
+test("Bot targeting: no active incoming ball returns null", () => {
+  assert.equal(selectThreateningBall([botBall(1, { active: false }), botBall(2, { vy: 0 })], 46), null);
+});
+
+test("Bot prediction: analytically reflects off either wall, including multiple bounces", () => {
+  assert.equal(predictWallReflectedX(350, 100, 1, 6, 360), 258);
+  assert.equal(predictWallReflectedX(10, -100, 1, 6, 360), 102);
+  assert.equal(predictWallReflectedX(180, 0, 100, 6, 360), 180);
+});
+
+test("Bot target clamp respects paddle width and game bounds", () => {
+  assert.equal(clampBotTarget(-20, 72, 360), 36);
+  assert.equal(clampBotTarget(500, 72, 360), 324);
+  assert.equal(clampBotTarget(180, 72, 360), 180);
+});
+
+test("Bot difficulty: harder controller moves faster while every level moves smoothly", () => {
+  const ball = botBall(1, { x: 300, y: 300, vx: 0, vy: -200 });
+  const easy = new BrickBlastBotController("easy");
+  const hard = new BrickBlastBotController("hard");
+  let easyX = 180;
+  let hardX = 180;
+  for (let frame = 0; frame < 30; frame++) {
+    easyX = easy.update([ball], easyX, 72, 46, 360, 1 / 60);
+    hardX = hard.update([ball], hardX, 72, 46, 360, 1 / 60);
+  }
+  assert.ok(easyX > 180 && easyX < 300);
+  assert.ok(hardX > easyX);
+  assert.ok(hardX < 300);
+});
+
+test("Bot controller reset clears target and returns toward center when there are no balls", () => {
+  const bot = new BrickBlastBotController("medium");
+  const nextX = bot.update([], 100, 72, 46, 360, 0.1);
+  assert.ok(nextX > 100 && nextX < 180);
+  bot.reset(180);
+  assert.equal(bot.update([], 180, 72, 46, 360, 0.1), 180);
+});
 
 test("Level Templates: exactly 5 distinct structural families", () => {
   assert.equal(TEMPLATES.length, 5);
@@ -311,3 +366,74 @@ test("Level Completion: triggers immediately when all active bricks are removed"
   assert.equal(levelCompleted, true, "Level complete triggers cleanly when active bricks collection reaches 0");
 });
 
+test("Multi-Touch Controls: standards-based pointerId tracking with activePointers Map", () => {
+  const GAME_HEIGHT = 580;
+  const GAME_WIDTH = 360;
+  const PADDLE_WIDTH = 76;
+  const minX = PADDLE_WIDTH / 2;
+  const maxX = GAME_WIDTH - PADDLE_WIDTH / 2;
+  const clamp = (v) => Math.max(minX, Math.min(maxX, v));
+
+  // Multi-touch tracker simulation using standards-based Pointer Events Map
+  const activePointers = new Map();
+  let orangePaddleX = GAME_WIDTH / 2;
+  let bluePaddleX = GAME_WIDTH / 2;
+
+  function handleNativePointerDown(e) {
+    const clampedX = clamp(e.x);
+    if (e.y > GAME_HEIGHT / 2) {
+      activePointers.set(e.pointerId, "orange");
+      orangePaddleX = clampedX;
+    } else {
+      activePointers.set(e.pointerId, "blue");
+      bluePaddleX = clampedX;
+    }
+  }
+
+  function handleNativePointerMove(e) {
+    const target = activePointers.get(e.pointerId);
+    if (!target) return;
+    const clampedX = clamp(e.x);
+    if (target === "orange") {
+      orangePaddleX = clampedX;
+    } else if (target === "blue") {
+      bluePaddleX = clampedX;
+    }
+  }
+
+  function handleNativePointerUp(e) {
+    activePointers.delete(e.pointerId);
+  }
+
+  // 1. Orange touches bottom half with pointerId=101 at x=100
+  handleNativePointerDown({ pointerId: 101, x: 100, y: 450 });
+  assert.equal(activePointers.get(101), "orange");
+  assert.equal(orangePaddleX, 100);
+  assert.equal(bluePaddleX, GAME_WIDTH / 2);
+
+  // 2. Blue touches top half with pointerId=102 at x=250
+  handleNativePointerDown({ pointerId: 102, x: 250, y: 100 });
+  assert.equal(activePointers.get(102), "blue");
+  assert.equal(bluePaddleX, 250);
+  assert.equal(orangePaddleX, 100);
+
+  // 3. Orange moves pointerId=101 to x=80 -> Blue paddle is NOT affected
+  handleNativePointerMove({ pointerId: 101, x: 80, y: 460 });
+  assert.equal(orangePaddleX, 80);
+  assert.equal(bluePaddleX, 250);
+
+  // 4. Blue moves pointerId=102 to x=280 -> Orange paddle is NOT affected
+  handleNativePointerMove({ pointerId: 102, x: 280, y: 90 });
+  assert.equal(bluePaddleX, 280);
+  assert.equal(orangePaddleX, 80);
+
+  // 5. Orange lifts finger -> Only pointerId=101 is deleted
+  handleNativePointerUp({ pointerId: 101 });
+  assert.equal(activePointers.has(101), false);
+  assert.equal(activePointers.has(102), true);
+
+  // 6. Blue continues moving pointerId=102
+  handleNativePointerMove({ pointerId: 102, x: 310, y: 110 });
+  assert.equal(bluePaddleX, 310);
+  assert.equal(orangePaddleX, 80); // Orange stays at 80
+});

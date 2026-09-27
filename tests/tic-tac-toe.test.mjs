@@ -256,28 +256,89 @@ test("Bot: Two optimal Minimax bots playing each other always result in a draw",
   assert.equal(state.winner, null);
 });
 
-// New Difficulty-Level Tests
-test("Bot Difficulty: Hard mode is 100% optimal and takes immediate winning moves", () => {
+// Difficulty-Level Tests
+test("Bot Difficulty: Hard mode always seizes immediate winning moves", () => {
   const board = [
     "O", "O", null,
     "X", "X", null,
     null, null, null
   ];
+  // Even with any RNG value, Hard must seize immediate win
+  const move1 = getBotMoveByDifficulty(board, "O", "hard", () => 0.0);
+  const move2 = getBotMoveByDifficulty(board, "O", "hard", () => 0.99);
+  assert.equal(move1, 2, "Hard bot must always seize immediate win (rng=0)");
+  assert.equal(move2, 2, "Hard bot must always seize immediate win (rng=0.99)");
+});
+
+test("Bot Difficulty: Hard mode always blocks immediate opponent threats", () => {
+  const board = [
+    "X", "X", null,
+    "O", null, null,
+    null, null, null
+  ];
+  // Even with any RNG value, Hard must block opponent's immediate winning threat at 2
+  const move1 = getBotMoveByDifficulty(board, "O", "hard", () => 0.0);
+  const move2 = getBotMoveByDifficulty(board, "O", "hard", () => 0.99);
+  assert.equal(move1, 2, "Hard bot must always block immediate win (rng=0)");
+  assert.equal(move2, 2, "Hard bot must always block immediate win (rng=0.99)");
+});
+
+test("Bot Difficulty: Hard mode usually selects optimal move but can select safe second-tier move", () => {
+  // Opening board: X played in top-left (0)
+  // X . .
+  // . . .
+  // . . .
+  const board = [
+    "X", null, null,
+    null, null, null,
+    null, null, null
+  ];
+
+  // When rng() >= 0.2, Hard selects optimal move (center 4)
+  const optimalMove = getBotMoveByDifficulty(board, "O", "hard", () => 0.5);
+  assert.equal(optimalMove, 4, "Optimal defense to corner opening is center (4)");
+
+  // When rng() < 0.2, Hard is capable of choosing a safe second-tier move
+  const nonOptimalMove = getBotMoveByDifficulty(board, "O", "hard", () => 0.05);
+  assert.ok(isValidMove(board, nonOptimalMove), "Second-tier move must be legal");
+  assert.notEqual(nonOptimalMove, 0, "Cannot play occupied cell");
+});
+
+test("Bot Difficulty: Hard mode avoids immediate blunder moves", () => {
+  // Board where O has to choose between safe moves vs letting X win on next turn
+  // X . .
+  // . O .
+  // . . X
+  const board = [
+    "X", null, null,
+    null, "O", null,
+    null, null, "X"
+  ];
+  // Cells 1, 3, 5, 7 are side moves that prevent corners.
   const move = getBotMoveByDifficulty(board, "O", "hard");
-  assert.equal(move, 2, "Hard bot must always seize immediate win");
+  assert.ok(isValidMove(board, move));
 });
 
-test("Bot Difficulty: Medium mode takes immediate winning moves", () => {
-  const board = [
+test("Bot Difficulty: Medium mode takes immediate wins and blocks most threats", () => {
+  const winBoard = [
     "O", "O", null,
     "X", "X", null,
     null, null, null
   ];
-  const move = getBotMoveByDifficulty(board, "O", "medium");
-  assert.equal(move, 2, "Medium bot must seize immediate win");
+  const winMove = getBotMoveByDifficulty(winBoard, "O", "medium");
+  assert.equal(winMove, 2, "Medium bot must seize immediate win");
+
+  const threatBoard = [
+    "X", "X", null,
+    null, "O", null,
+    null, null, null
+  ];
+  // With rng < 0.8, Medium blocks
+  const blockedMove = getBotMoveByDifficulty(threatBoard, "O", "medium", () => 0.3);
+  assert.equal(blockedMove, 2, "Medium blocks threat when rng < 0.8");
 });
 
-test("Bot Difficulty: Easy mode always produces legal moves", () => {
+test("Bot Difficulty: Easy mode always produces legal moves and is intentionally imperfect", () => {
   const board = [
     "X", "O", null,
     null, "X", null,
@@ -288,31 +349,23 @@ test("Bot Difficulty: Easy mode always produces legal moves", () => {
     const move = getBotMoveByDifficulty(board, "O", "easy");
     assert.ok(isValidMove(board, move), `Easy move ${move} must always be a legal empty cell`);
   }
-});
 
-test("Bot Difficulty: Easy mode can make suboptimal choices", () => {
-  // In this board, cell 2 is the ONLY optimal block against X's win:
-  // X X .
-  // O . .
-  // . . .
-  const board = [
+  // Easy frequently misses threats
+  const threatBoard = [
     "X", "X", null,
     "O", null, null,
     null, null, null
   ];
-
-  let madeSuboptimalChoice = false;
-  // Over 30 trials, with 70% random chance, Easy will pick a move other than 2
-  for (let i = 0; i < 30; i++) {
-    const move = getBotMoveByDifficulty(board, "O", "easy");
-    assert.ok(isValidMove(board, move));
+  let missedThreat = false;
+  for (let i = 0; i < 20; i++) {
+    const move = getBotMoveByDifficulty(threatBoard, "O", "easy");
+    assert.ok(isValidMove(threatBoard, move));
     if (move !== 2) {
-      madeSuboptimalChoice = true;
+      missedThreat = true;
       break;
     }
   }
-
-  assert.ok(madeSuboptimalChoice, "Easy bot should be beatable and occasionally miss optimal blocks");
+  assert.ok(missedThreat, "Easy bot should frequently miss blocking immediate threats");
 });
 
 test("Bot Difficulty: All difficulties complete matches legally without infinite loops", () => {

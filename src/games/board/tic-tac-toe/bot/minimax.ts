@@ -79,36 +79,59 @@ function minimax(
   }
 }
 
+export interface ScoredMove {
+  move: number;
+  score: number;
+}
+
+/**
+ * Positional weight for tie-breaking moves of equal Minimax value:
+ * Center (4) > Corners (0, 2, 6, 8) > Edges (1, 3, 5, 7).
+ */
+function getPositionalBonus(move: number): number {
+  if (move === 4) return 0.2;
+  if (move === 0 || move === 2 || move === 6 || move === 8) return 0.1;
+  return 0;
+}
+
+/**
+ * Evaluates and ranks all legal moves for the bot using Minimax search.
+ * Returns an array of ScoredMove objects sorted from best to worst.
+ */
+export function scoreAllMoves(board: Board, botPlayer: Player): ScoredMove[] {
+  const availableMoves = getAvailableMoves(board);
+  if (availableMoves.length === 0) {
+    return [];
+  }
+
+  const opponentPlayer: Player = botPlayer === "X" ? "O" : "X";
+  const scored: ScoredMove[] = [];
+
+  for (const move of availableMoves) {
+    const nextBoard = placeMark(board, move, botPlayer);
+    const score = minimax(nextBoard, false, botPlayer, opponentPlayer, 0);
+    scored.push({ move, score });
+  }
+
+  // Sort descending by Minimax score; use positional heuristic as secondary tie-breaker
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return getPositionalBonus(b.move) - getPositionalBonus(a.move);
+  });
+
+  return scored;
+}
+
 /**
  * Determines the optimal move for the bot on the given board state.
  * Returns the cell index (0..8) of the best move.
  */
 export function findBestMove(board: Board, botPlayer: Player): number {
-  const availableMoves = getAvailableMoves(board);
-
-  // If no moves or invalid state, return -1
-  if (availableMoves.length === 0) {
+  const ranked = scoreAllMoves(board, botPlayer);
+  if (ranked.length === 0) {
     return -1;
   }
-
-  // Opening move optimization: if the entire board is empty, pick center for instant first move
-  if (availableMoves.length === 9) {
-    return 4;
-  }
-
-  const opponentPlayer: Player = botPlayer === "X" ? "O" : "X";
-  let bestScore = -Infinity;
-  let bestMove = availableMoves[0];
-
-  for (const move of availableMoves) {
-    const nextBoard = placeMark(board, move, botPlayer);
-    const score = minimax(nextBoard, false, botPlayer, opponentPlayer, 0);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMove = move;
-    }
-  }
-
-  return bestMove;
+  return ranked[0].move;
 }

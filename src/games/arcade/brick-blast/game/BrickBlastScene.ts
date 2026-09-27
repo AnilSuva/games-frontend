@@ -30,6 +30,7 @@ import { ALL_POWER_UP_TYPES, POWER_UP_DEFINITIONS, type PowerUpType } from "../c
 import { generateLevel, getLevelBaseSpeed } from "../levels/generator";
 import type { Ball, Brick, BrickBlastCallbacks, DroppedPowerUp, Paddle } from "./types";
 import type { PlatformPlayer } from "@/games/common/startingPlayer";
+import { BrickBlastBotController } from "./botController";
 
 export interface SceneInitData {
   startingPlayer: PlatformPlayer;
@@ -45,6 +46,7 @@ export class BrickBlastScene extends Phaser.Scene {
   private currentStarter: PlatformPlayer = "orange";
   private mode: "1v1" | "vs-bot" = "1v1";
   private difficulty: "easy" | "medium" | "hard" = "medium";
+  private botController: BrickBlastBotController | null = null;
 
   private orangePaddle!: Paddle;
   private bluePaddle!: Paddle;
@@ -57,6 +59,11 @@ export class BrickBlastScene extends Phaser.Scene {
   private isGameOver = false;
   private isTransitioningLevel = false;
   private hasLevelStarted = false;
+
+  private onCanvasPointerDown?: (e: PointerEvent) => void;
+  private onCanvasPointerMove?: (e: PointerEvent) => void;
+  private onCanvasPointerUp?: (e: PointerEvent) => void;
+  private activePointers = new Map<number, "orange" | "blue">();
 
   private ballIdCounter = 0;
   private powerUpIdCounter = 0;
@@ -107,12 +114,14 @@ export class BrickBlastScene extends Phaser.Scene {
     this.callbacks = data.callbacks || {};
     this.mode = data.mode || "1v1";
     this.difficulty = data.difficulty || "medium";
+    this.botController = this.mode === "vs-bot" ? new BrickBlastBotController(this.difficulty) : null;
     this.currentLevel = 1;
     this.score = 0;
     this.isPaused = false;
     this.isGameOver = false;
     this.isTransitioningLevel = false;
     this.hasLevelStarted = false;
+    this.activePointers.clear();
     this.clearAllGameObjects();
     this.ballIdCounter = 0;
     this.powerUpIdCounter = 0;
@@ -153,9 +162,10 @@ export class BrickBlastScene extends Phaser.Scene {
       this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     }
 
-    // 5. Setup Touch / Pointer Controls
-    this.input.on("pointerdown", this.handlePointerInput, this);
-    this.input.on("pointermove", this.handlePointerInput, this);
+    // 5. Setup Standards-based Multi-Touch / Pointer Controls (Chrome, Brave, Safari, Firefox)
+    this.setupCanvasPointerListeners();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
 
     // 6. Build Level 1 Bricks & Serve initial Ball
     this.buildCurrentLevel();
@@ -286,31 +296,144 @@ export class BrickBlastScene extends Phaser.Scene {
     ball.graphics.fillCircle(ball.x - ball.radius * 0.3, ball.y - ball.radius * 0.3, ball.radius * 0.3);
   }
 
-  private handlePointerInput(pointer: Phaser.Input.Pointer) {
+  private setupCanvasPointerListeners() {
+    this.removeCanvasPointerListeners();
+
+    const canvas = this.game.canvas;
+    if (!canvas) return;
+
+    canvas.style.touchAction = "none";
+
+    this.onCanvasPointerDown = (e: PointerEvent) => this.handleNativePointerDown(e);
+    this.onCanvasPointerMove = (e: PointerEvent) => this.handleNativePointerMove(e);
+    this.onCanvasPointerUp = (e: PointerEvent) => this.handleNativePointerUp(e);
+
+    canvas.addEventListener("pointerdown", this.onCanvasPointerDown, { passive: false });
+    canvas.addEventListener("pointermove", this.onCanvasPointerMove, { passive: false });
+    canvas.addEventListener("pointerup", this.onCanvasPointerUp, { passive: false });
+    canvas.addEventListener("pointercancel", this.onCanvasPointerUp, { passive: false });
+  }
+
+  private removeCanvasPointerListeners() {
+    const canvas = this.game.canvas;
+    if (canvas) {
+      if (this.onCanvasPointerDown) {
+        canvas.removeEventListener("pointerdown", this.onCanvasPointerDown);
+      }
+      if (this.onCanvasPointerMove) {
+        canvas.removeEventListener("pointermove", this.onCanvasPointerMove);
+      }
+      if (this.onCanvasPointerUp) {
+        canvas.removeEventListener("pointerup", this.onCanvasPointerUp);
+        canvas.removeEventListener("pointercancel", this.onCanvasPointerUp);
+      }
+    }
+    this.activePointers.clear();
+  }
+
+  private getCanvasGameCoords(e: PointerEvent): { x: number; y: number } | null {
+    const canvas = this.game.canvas;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    const scaleX = GAME_WIDTH / rect.width;
+    const scaleY = GAME_HEIGHT / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    return { x, y };
+  }
+
+  private handleNativePointerDown(e: PointerEvent) {
     if (this.isPaused || this.isGameOver) return;
-    if (!pointer.isDown) return;
+    if (e.cancelable) e.preventDefault();
+
+    const canvas = this.game.canvas;
+    if (canvas && canvas.setPointerCapture) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // Ignored if pointer capture is not permitted
+      }
+    }
+
+    const coords = this.getCanvasGameCoords(e);
+    if (!coords) return;
 
     const clampedX = Phaser.Math.Clamp(
-      pointer.x,
+      coords.x,
       PADDLE_WIDTH / 2,
       GAME_WIDTH - PADDLE_WIDTH / 2
     );
 
     if (this.mode === "vs-bot") {
-      // In vs-bot mode, touch controls the bottom Orange paddle regardless of screen half
+      this.activePointers.set(e.pointerId, "orange");
+      this.orangePaddle.x = clampedX;
+      this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
+      return;
+    }
+
+    if (coords.y > GAME_HEIGHT / 2) {
+      // Lower half touch controls Orange paddle
+      this.activePointers.set(e.pointerId, "orange");
       this.orangePaddle.x = clampedX;
       this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
     } else {
-      if (pointer.y > GAME_HEIGHT / 2) {
-        // Lower half controls Orange paddle
-        this.orangePaddle.x = clampedX;
-        this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
-      } else {
-        // Upper half controls Blue paddle
-        this.bluePaddle.x = clampedX;
-        this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+      // Upper half touch controls Blue paddle
+      this.activePointers.set(e.pointerId, "blue");
+      this.bluePaddle.x = clampedX;
+      this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+    }
+  }
+
+  private handleNativePointerMove(e: PointerEvent) {
+    if (this.isPaused || this.isGameOver) return;
+
+    let target = this.activePointers.get(e.pointerId);
+
+    const coords = this.getCanvasGameCoords(e);
+    if (!coords) return;
+
+    // Fallback: assign if a touch began outside or entered with button held down
+    if (!target && e.buttons > 0) {
+      target = this.mode === "vs-bot" || coords.y > GAME_HEIGHT / 2 ? "orange" : "blue";
+      this.activePointers.set(e.pointerId, target);
+    }
+
+    if (!target) return;
+    if (e.cancelable) e.preventDefault();
+
+    const clampedX = Phaser.Math.Clamp(
+      coords.x,
+      PADDLE_WIDTH / 2,
+      GAME_WIDTH - PADDLE_WIDTH / 2
+    );
+
+    if (target === "orange") {
+      this.orangePaddle.x = clampedX;
+      this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
+    } else if (target === "blue") {
+      this.bluePaddle.x = clampedX;
+      this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+    }
+  }
+
+  private handleNativePointerUp(e: PointerEvent) {
+    const canvas = this.game.canvas;
+    if (canvas && canvas.releasePointerCapture) {
+      try {
+        if (canvas.hasPointerCapture(e.pointerId)) {
+          canvas.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignored
       }
     }
+
+    this.activePointers.delete(e.pointerId);
   }
 
   update(_time: number, delta: number) {
@@ -336,30 +459,17 @@ export class BrickBlastScene extends Phaser.Scene {
   }
 
   private updateBotPaddle(dt: number) {
-    const botSpeed =
-      this.difficulty === "easy"
-        ? 190
-        : this.difficulty === "hard"
-        ? 340
-        : 260;
-
-    // Track active ball moving towards top paddle
-    const incomingBalls = this.balls.filter((b) => b.active && b.vy < 0);
-
-    let targetX = GAME_WIDTH / 2;
-    if (incomingBalls.length > 0) {
-      const closest = incomingBalls.reduce((prev, curr) => (curr.y < prev.y ? curr : prev));
-      targetX = closest.x;
-    }
-
-    const diff = targetX - this.bluePaddle.x;
-    if (Math.abs(diff) > 4) {
-      const step = Math.sign(diff) * Math.min(Math.abs(diff), botSpeed * dt);
-      this.bluePaddle.x = Phaser.Math.Clamp(
-        this.bluePaddle.x + step,
-        PADDLE_WIDTH / 2,
-        GAME_WIDTH - PADDLE_WIDTH / 2
-      );
+    if (!this.botController) return;
+    const nextX = this.botController.update(
+      this.balls,
+      this.bluePaddle.x,
+      this.bluePaddle.width,
+      this.bluePaddle.y,
+      GAME_WIDTH,
+      dt
+    );
+    if (Math.abs(nextX - this.bluePaddle.x) > 0.01) {
+      this.bluePaddle.x = nextX;
       this.renderPaddle(this.bluePaddle, COLOR_BLUE);
     }
   }
@@ -774,6 +884,7 @@ export class BrickBlastScene extends Phaser.Scene {
     difficulty?: "easy" | "medium" | "hard"
   ) {
     this.clearAllGameObjects();
+    this.botController?.reset(GAME_WIDTH / 2);
     this.init({
       startingPlayer: startingPlayer || this.currentStarter,
       callbacks: this.callbacks,
@@ -797,5 +908,15 @@ export class BrickBlastScene extends Phaser.Scene {
     this.isPaused = false;
     this.statusText.setAlpha(0);
     this.callbacks.onLifecycleChange?.("playing");
+  }
+
+  public shutdown() {
+    this.removeCanvasPointerListeners();
+    this.botController?.reset();
+    this.botController = null;
+    this.clearAllGameObjects();
+    this.orangePaddle?.graphics?.destroy();
+    this.bluePaddle?.graphics?.destroy();
+    this.statusText?.destroy();
   }
 }
