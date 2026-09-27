@@ -6,6 +6,7 @@ import { GameModeSelector, type GameModeOption } from "@/components/game-ui/Game
 import { GameResultPopup } from "@/components/game-ui/GameResultPopup";
 import { createInitialState, connectFourReducer } from "../logic/reducer";
 import { requestBotMove, terminateBotWorker, type BotDifficulty } from "../bot/botService";
+import { consumeStartingPlayer } from "@/games/common/startingPlayer";
 import { ConnectFourCell } from "./ConnectFourCell";
 import { WinningLine } from "./WinningLine";
 
@@ -125,7 +126,9 @@ export default function ConnectFourGame({
 
   const startFreshMatch = useCallback(() => {
     botAbortControllerRef.current?.abort();
-    dispatch({ type: "RESET" });
+    const starter = consumeStartingPlayer("connect-four");
+    const startingPlayer = starter === "orange" ? "R" : "Y";
+    dispatch({ type: "RESET", startingPlayer });
     setInModeSelection(false);
     setShowResultPopup(false);
     setIsPopupDismissed(false);
@@ -139,7 +142,9 @@ export default function ConnectFourGame({
       if (modeId === "1v1") {
         setSessionConfig({ mode: "1v1", difficulty: "medium" });
       }
-      dispatch({ type: "RESET" });
+      const starter = consumeStartingPlayer("connect-four");
+      const startingPlayer = starter === "orange" ? "R" : "Y";
+      dispatch({ type: "RESET", startingPlayer });
       setInModeSelection(false);
       setShowResultPopup(false);
       setIsPopupDismissed(false);
@@ -156,7 +161,9 @@ export default function ConnectFourGame({
         mode: "vs-bot",
         difficulty: configValue as BotDifficulty,
       });
-      dispatch({ type: "RESET" });
+      const starter = consumeStartingPlayer("connect-four");
+      const startingPlayer = starter === "orange" ? "R" : "Y";
+      dispatch({ type: "RESET", startingPlayer });
       setInModeSelection(false);
       setShowResultPopup(false);
       setIsPopupDismissed(false);

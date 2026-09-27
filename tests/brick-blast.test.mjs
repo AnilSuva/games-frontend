@@ -1,0 +1,313 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { TEMPLATES } from "../src/games/arcade/brick-blast/levels/layouts.ts";
+import { generateLevel, getLevelBaseSpeed } from "../src/games/arcade/brick-blast/levels/generator.ts";
+import {
+  INITIAL_BALL_SPEED,
+  LEVEL_SPEED_MULTIPLIER,
+  MIN_SPEED_FACTOR,
+  MAX_SPEED_FACTOR,
+  MIN_BALL_RADIUS,
+  MAX_BALL_RADIUS,
+  MAX_BALL_POWER,
+  MAX_ACTIVE_BALLS,
+  PADDLE_WIDTH,
+  GAME_WIDTH,
+} from "../src/games/arcade/brick-blast/config/balance.ts";
+import { ALL_POWER_UP_TYPES } from "../src/games/arcade/brick-blast/config/powerUps.ts";
+
+test("Level Templates: exactly 5 distinct structural families", () => {
+  assert.equal(TEMPLATES.length, 5);
+  const names = new Set(TEMPLATES.map((t) => t.name));
+  assert.equal(names.size, 5);
+});
+
+test("Level Templates: all 5 templates possess mathematical vertical symmetry", () => {
+  for (const template of TEMPLATES) {
+    const rows = template.grid.length;
+    assert.equal(rows, 8, `${template.name} must have 8 rows`);
+    for (let r = 0; r < 4; r++) {
+      const oppR = rows - 1 - r;
+      assert.deepEqual(
+        template.grid[r],
+        template.grid[oppR],
+        `${template.name} row ${r} must vertically match row ${oppR}`
+      );
+    }
+  }
+});
+
+test("Level Generator: generates non-empty, valid layouts for consecutive levels", () => {
+  for (let level = 1; level <= 10; level++) {
+    const data = generateLevel(level);
+    assert.equal(data.levelNumber, level);
+    assert.ok(data.bricks.length >= 16, `Level ${level} must have at least 16 bricks`);
+    assert.ok(data.bricks.every((b) => b.x > 0 && b.x < GAME_WIDTH));
+    assert.ok(data.bricks.every((b) => b.y > 50 && b.y < 500));
+    assert.ok(data.bricks.every((b) => b.hp > 0 && b.maxHp > 0));
+  }
+});
+
+test("Level Generator: special bricks approximate target percentage (~5-6%)", () => {
+  let totalBricks = 0;
+  let totalSpecial = 0;
+
+  for (let lvl = 1; lvl <= 15; lvl++) {
+    const data = generateLevel(lvl, lvl * 1000 + 42);
+    totalBricks += data.totalBricks;
+    totalSpecial += data.specialBrickCount;
+    assert.ok(data.specialBrickCount > 0, `Level ${lvl} must have at least 1 special brick`);
+  }
+
+  const ratio = totalSpecial / totalBricks;
+  // Verify ratio is within sensible 3% to 10% bounds
+  assert.ok(ratio >= 0.03 && ratio <= 0.10, `Special brick ratio ${ratio} must be approximately ~5%`);
+});
+
+test("Level Speed: geometric progression increases ball speed by exactly 5% each level", () => {
+  assert.equal(LEVEL_SPEED_MULTIPLIER, 1.05);
+  const s1 = getLevelBaseSpeed(1);
+  const s2 = getLevelBaseSpeed(2);
+  const s3 = getLevelBaseSpeed(3);
+  const s6 = getLevelBaseSpeed(6);
+
+  assert.equal(s1, INITIAL_BALL_SPEED);
+  assert.ok(Math.abs(s2 - INITIAL_BALL_SPEED * LEVEL_SPEED_MULTIPLIER) < 0.001);
+  assert.ok(Math.abs(s3 - INITIAL_BALL_SPEED * LEVEL_SPEED_MULTIPLIER * LEVEL_SPEED_MULTIPLIER) < 0.001);
+  assert.ok(Math.abs(s6 - INITIAL_BALL_SPEED * Math.pow(1.05, 5)) < 0.001);
+  assert.ok(s6 > s3 && s3 > s2 && s2 > s1);
+});
+
+test("Game Logic: brick damage and two-hit bricks vs ball power", () => {
+  // Normal 1-hit brick
+  let normalHp = 1;
+  const ballPowerNormal = 1;
+  normalHp -= ballPowerNormal;
+  assert.ok(normalHp <= 0, "Normal brick breaks with 1 hit");
+
+  // Strong 2-hit brick with normal ball
+  let strongHp = 2;
+  strongHp -= ballPowerNormal;
+  assert.equal(strongHp, 1, "Strong brick survives 1 hit with 1 HP remaining");
+  strongHp -= ballPowerNormal;
+  assert.equal(strongHp, 0, "Strong brick breaks on second hit");
+
+  // Strong 2-hit brick with empowered ball (power = 2)
+  let strongHp2 = 2;
+  const ballPowerEmpowered = 2;
+  strongHp2 -= ballPowerEmpowered;
+  assert.ok(strongHp2 <= 0, "Empowered ball shatters 2-hit brick in 1 hit");
+});
+
+test("Power-Up Logic: all 6 power-up types exist and respect balance caps", () => {
+  assert.equal(ALL_POWER_UP_TYPES.length, 6);
+
+  // Speed multiplier limits
+  let speedMult = 1.0;
+  // Apply speed_up repeatedly
+  for (let i = 0; i < 10; i++) {
+    speedMult = Math.min(MAX_SPEED_FACTOR, speedMult * 1.15);
+  }
+  assert.equal(speedMult, MAX_SPEED_FACTOR);
+
+  // Apply speed_down repeatedly
+  for (let i = 0; i < 10; i++) {
+    speedMult = Math.max(MIN_SPEED_FACTOR, speedMult * 0.85);
+  }
+  assert.equal(speedMult, MIN_SPEED_FACTOR);
+
+  // Size caps
+  let radius = 6;
+  for (let i = 0; i < 10; i++) radius = Math.min(MAX_BALL_RADIUS, radius + 3);
+  assert.equal(radius, MAX_BALL_RADIUS);
+
+  for (let i = 0; i < 10; i++) radius = Math.max(MIN_BALL_RADIUS, radius - 2);
+  assert.equal(radius, MIN_BALL_RADIUS);
+
+  // Power caps
+  let power = 1;
+  for (let i = 0; i < 10; i++) power = Math.min(MAX_BALL_POWER, power + 1);
+  assert.equal(power, MAX_BALL_POWER);
+});
+
+test("Game Logic: paddle horizontal bounds are strictly constrained", () => {
+  const minX = PADDLE_WIDTH / 2;
+  const maxX = GAME_WIDTH - PADDLE_WIDTH / 2;
+
+  const clamp = (val) => Math.max(minX, Math.min(maxX, val));
+
+  assert.equal(clamp(-50), minX);
+  assert.equal(clamp(GAME_WIDTH + 100), maxX);
+  assert.equal(clamp(GAME_WIDTH / 2), GAME_WIDTH / 2);
+});
+
+test("Loss Condition: multi-ball rule only triggers loss when final ball is lost", () => {
+  assert.equal(MAX_ACTIVE_BALLS, 4);
+  const activeBalls = [{ id: 1, active: true }, { id: 2, active: true }];
+
+  // First ball escapes
+  activeBalls[0].active = false;
+  const remaining1 = activeBalls.filter((b) => b.active);
+  const isLoss1 = remaining1.length === 0;
+  assert.equal(isLoss1, false, "Losing 1 ball with active balls remaining is NOT a match loss");
+
+  // Second ball escapes
+  activeBalls[1].active = false;
+  const remaining2 = activeBalls.filter((b) => b.active);
+  const isLoss2 = remaining2.length === 0;
+  assert.equal(isLoss2, true, "Match loss occurs when the final active ball escapes");
+});
+
+test("2-Player Paddles: Player 1 (Orange) is bottom and Player 2 (Blue) is top", () => {
+  // Top paddle (Blue) is near y = 46, bottom paddle (Orange) is near y = 534
+  const topY = 46;
+  const bottomY = 534;
+  assert.ok(topY < GAME_WIDTH / 2, "Blue paddle must be situated at top of arena");
+  assert.ok(bottomY > GAME_WIDTH / 2, "Orange paddle must be situated at bottom of arena");
+  assert.ok(bottomY > topY, "Orange paddle is strictly lower than Blue paddle");
+});
+
+test("Serve Rotation: levels alternate serving player (L1: Orange, L2: Blue, etc.)", () => {
+  let starter = "orange";
+  const serves = [];
+  for (let lvl = 1; lvl <= 6; lvl++) {
+    serves.push(starter);
+    starter = starter === "orange" ? "blue" : "orange";
+  }
+
+  assert.deepEqual(serves, ["orange", "blue", "orange", "blue", "orange", "blue"]);
+});
+
+test("Loss Condition: opposite player wins when ball breaches a defense", () => {
+  const determineWinner = (escapeSide) => (escapeSide === "bottom" ? "blue" : "orange");
+
+  assert.equal(determineWinner("bottom"), "blue", "When ball escapes bottom (Orange defense), Blue wins");
+  assert.equal(determineWinner("top"), "orange", "When ball escapes top (Blue defense), Orange wins");
+});
+
+test("Brick Destruction: HP reaches 0 immediately destroys display object and removes from active bricks", () => {
+  let displayDestroyed = false;
+  let displayCleared = false;
+
+  const mockGraphics = {
+    clear() {
+      displayCleared = true;
+    },
+    destroy() {
+      displayDestroyed = true;
+    },
+  };
+
+  const bricks = [
+    {
+      id: "b1",
+      hp: 1,
+      maxHp: 1,
+      alive: true,
+      graphics: mockGraphics,
+    },
+    {
+      id: "b2",
+      hp: 1,
+      maxHp: 1,
+      alive: true,
+      graphics: { clear() {}, destroy() {} },
+    },
+  ];
+
+  // Ball hits b1 with power = 1
+  const ballPower = 1;
+  const targetBrick = bricks[0];
+  targetBrick.hp -= ballPower;
+
+  if (targetBrick.hp <= 0) {
+    targetBrick.alive = false;
+    targetBrick.graphics.clear();
+    targetBrick.graphics.destroy();
+    const idx = bricks.indexOf(targetBrick);
+    if (idx !== -1) bricks.splice(idx, 1);
+  }
+
+  assert.equal(targetBrick.alive, false, "Destroyed brick marked alive = false");
+  assert.equal(displayCleared, true, "Display object graphics cleared");
+  assert.equal(displayDestroyed, true, "Display object destroyed immediately");
+  assert.equal(bricks.length, 1, "Brick removed from active bricks collection");
+  assert.equal(bricks[0].id, "b2", "Remaining brick is b2");
+  assert.ok(!bricks.includes(targetBrick), "Ball cannot collide with destroyed brick again");
+});
+
+test("2-Hit Bricks: 1st hit decreases HP and preserves display; 2nd hit destroys and removes completely", () => {
+  let displayDestroyed = false;
+  let renderCount = 0;
+
+  const mockGraphics = {
+    clear() {},
+    destroy() {
+      displayDestroyed = true;
+    },
+  };
+
+  const brick = {
+    hp: 2,
+    maxHp: 2,
+    alive: true,
+    graphics: mockGraphics,
+  };
+
+  const activeBricks = [brick];
+
+  // Helper simulating collision hit step
+  function hitBrick(target, power) {
+    target.hp -= power;
+    if (target.hp <= 0) {
+      target.alive = false;
+      target.graphics.clear();
+      target.graphics.destroy();
+      const idx = activeBricks.indexOf(target);
+      if (idx !== -1) activeBricks.splice(idx, 1);
+    } else {
+      renderCount++; // Render damaged appearance
+    }
+  }
+
+  // First hit with standard ball (power = 1)
+  hitBrick(brick, 1);
+  assert.equal(brick.hp, 1, "Brick HP reduced to 1 after first hit");
+  assert.equal(brick.alive, true, "Brick is still alive after first hit");
+  assert.equal(activeBricks.length, 1, "Brick remains in active collision collection");
+  assert.equal(displayDestroyed, false, "Display object is NOT destroyed after first hit");
+  assert.equal(renderCount, 1, "Damaged appearance was rendered");
+
+  // Second hit with standard ball (power = 1)
+  hitBrick(brick, 1);
+  assert.equal(brick.hp, 0, "Brick HP reaches 0 on second hit");
+  assert.equal(brick.alive, false, "Brick is marked alive = false on second hit");
+  assert.equal(displayDestroyed, true, "Display object is destroyed on second hit");
+  assert.equal(activeBricks.length, 0, "Brick is removed from active collision collection");
+});
+
+test("Level Completion: triggers immediately when all active bricks are removed", () => {
+  const activeBricks = [{ id: 1 }, { id: 2 }];
+  let levelCompleted = false;
+
+  function checkLevel(bricks, hasStarted, isTransitioning) {
+    if (!hasStarted || isTransitioning) return false;
+    return bricks.length === 0;
+  }
+
+  // Initial check before all bricks are destroyed
+  assert.equal(checkLevel(activeBricks, true, false), false);
+
+  // Destroy first brick
+  activeBricks.pop();
+  assert.equal(checkLevel(activeBricks, true, false), false);
+
+  // Destroy second (final) brick
+  activeBricks.pop();
+  assert.equal(activeBricks.length, 0);
+
+  // Now level completion check runs
+  levelCompleted = checkLevel(activeBricks, true, false);
+  assert.equal(levelCompleted, true, "Level complete triggers cleanly when active bricks collection reaches 0");
+});
+

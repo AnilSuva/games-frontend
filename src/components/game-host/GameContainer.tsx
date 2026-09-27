@@ -18,9 +18,7 @@ export function GameContainer({ game }: GameContainerProps) {
   const [score, setScore] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [lifecycle, setLifecycle] = useState<GameLifecycle>(
-    game.id === "tic-tac-toe" ? "pre-game" : "playing"
-  );
+  const [lifecycle, setLifecycle] = useState<GameLifecycle>("pre-game");
   const [selectedMode] = useState<GameMode>(
     game.supportedModes[0] || "local-2p"
   );

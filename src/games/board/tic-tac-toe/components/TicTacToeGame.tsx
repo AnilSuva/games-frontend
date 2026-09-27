@@ -6,6 +6,7 @@ import { GameModeSelector, type GameModeOption } from "@/components/game-ui/Game
 import { GameResultPopup } from "@/components/game-ui/GameResultPopup";
 import { createInitialState, ticTacToeReducer } from "../logic/reducer";
 import { requestBotMove, type BotDifficulty } from "../bot/botService";
+import { consumeStartingPlayer } from "@/games/common/startingPlayer";
 import { TicTacToeCell } from "./TicTacToeCell";
 import { WinningStrike } from "./WinningStrike";
 
@@ -104,7 +105,9 @@ export default function TicTacToeGame({
   // Starts a fresh match preserving the current mode and difficulty configuration
   const startFreshMatch = useCallback(() => {
     botAbortControllerRef.current?.abort();
-    dispatch({ type: "RESET" });
+    const starter = consumeStartingPlayer("tic-tac-toe");
+    const startingPlayer = starter === "orange" ? "X" : "O";
+    dispatch({ type: "RESET", startingPlayer });
     setInModeSelection(false);
     setShowResultPopup(false);
     setIsPopupDismissed(false);
@@ -119,7 +122,9 @@ export default function TicTacToeGame({
       if (modeId === "1v1") {
         setSessionConfig({ mode: "1v1", difficulty: "medium" });
       }
-      dispatch({ type: "RESET" });
+      const starter = consumeStartingPlayer("tic-tac-toe");
+      const startingPlayer = starter === "orange" ? "X" : "O";
+      dispatch({ type: "RESET", startingPlayer });
       setInModeSelection(false);
       setShowResultPopup(false);
       setIsPopupDismissed(false);
@@ -136,7 +141,9 @@ export default function TicTacToeGame({
         mode: "vs-bot",
         difficulty: configValue as BotDifficulty,
       });
-      dispatch({ type: "RESET" });
+      const starter = consumeStartingPlayer("tic-tac-toe");
+      const startingPlayer = starter === "orange" ? "X" : "O";
+      dispatch({ type: "RESET", startingPlayer });
       setInModeSelection(false);
       setShowResultPopup(false);
       setIsPopupDismissed(false);

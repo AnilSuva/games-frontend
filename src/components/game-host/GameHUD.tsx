@@ -16,7 +16,7 @@ interface GameHUDProps {
 export function GameHUD({
   game,
   score,
-  lifecycle = "playing",
+  lifecycle = "pre-game",
   onPause,
   onToggleFullscreen,
   isFullscreen,

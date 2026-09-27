@@ -17,6 +17,6 @@ export const CARTRIDGE_MAP: Record<
     () => import("@/games/board/connect-four/components/ConnectFourGame")
   ),
   "brick-blast": React.lazy(
-    () => import("@/games/arcade/brick-blast/preview/BrickBlastPreview")
+    () => import("@/games/arcade/brick-blast/components/BrickBlastGame")
   ),
 };

@@ -91,14 +91,14 @@ export const GAME_MANIFESTS: GameManifest[] = [
     category: "arcade",
     engine: "phaser",
     status: "available",
-    supportedModes: ["local-2p"],
+    supportedModes: ["local-2p", "pvp-bot"],
     defaultOrientation: "portrait",
     aspectRatio: "4/3",
     iconName: "layers",
     badgeText: "Fast Action",
     tags: ["Arcade", "Physics", "Reflexes"],
     loader: () =>
-      import("@/games/arcade/brick-blast/preview/BrickBlastPreview"),
+      import("@/games/arcade/brick-blast/components/BrickBlastGame"),
   },
   {
     id: "archery",
