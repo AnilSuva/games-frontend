@@ -17,14 +17,26 @@ export interface ServerConfig {
   rateLimitRefillPerSec: number;
 }
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://games.anilsuva.com",
+];
+
 function parseOrigins(rawOrigins?: string): string[] {
   if (!rawOrigins || rawOrigins.trim() === "") {
-    return ["http://localhost:3000", "http://127.0.0.1:3000"];
+    return DEFAULT_ALLOWED_ORIGINS;
   }
-  return rawOrigins
+  const origins = rawOrigins
     .split(",")
     .map((o) => o.trim().replace(/\/+$/, ""))
     .filter(Boolean);
+
+  // Guarantee production frontend origin is always allowed
+  if (!origins.some((o) => o.toLowerCase() === "https://games.anilsuva.com")) {
+    origins.push("https://games.anilsuva.com");
+  }
+  return origins;
 }
 
 export function loadConfig(): ServerConfig {

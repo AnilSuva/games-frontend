@@ -15,6 +15,10 @@ import type {
 const SESSION_TOKEN_KEY = "omniplay_session_token";
 const ACTIVE_ROOM_KEY = "omniplay_active_room";
 
+// Sensible timeout thresholds per specification
+const CONNECTION_TIMEOUT_MS = 10_000;
+const ROOM_OPERATION_TIMEOUT_MS = 8_000;
+
 interface StoredRoomInfo {
   roomId: string;
   roomCode: string;
@@ -62,6 +66,26 @@ function setStoredRoomInfo(info: StoredRoomInfo | null): void {
   }
 }
 
+function formatRoomErrorMessage(code: string, rawMessage?: string): string {
+  switch (code) {
+    case "ROOM_NOT_FOUND":
+      return "Room not found. Please check the 6-character room code.";
+    case "ROOM_FULL":
+      return "This room is already full.";
+    case "INVALID_ROOM_STATE":
+      return "This match is no longer available to join.";
+    case "RATE_LIMITED":
+      return "Too many requests. Please slow down and try again.";
+    case "RECONNECT_EXPIRED":
+    case "INVALID_SESSION":
+      return "The previous match has ended or expired.";
+    case "UNAUTHORIZED":
+      return "Multiplayer session expired. Reconnecting...";
+    default:
+      return rawMessage || "An error occurred. Please try again.";
+  }
+}
+
 let requestCounter = 0;
 function nextRequestId(): string {
   requestCounter = (requestCounter + 1) % 1_000_000;
@@ -83,6 +107,39 @@ export function useOnlineTicTacToe() {
   const handleServerMessageRef = useRef<((envelope: ServerEnvelope) => void) | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
 
+  // Request-specific timeout references
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const roomTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const clearConnectionTimeout = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearRoomTimeout = useCallback(() => {
+    if (roomTimeoutRef.current) {
+      clearTimeout(roomTimeoutRef.current);
+      roomTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startRoomTimeout = useCallback(
+    (operation: "create" | "join") => {
+      clearRoomTimeout();
+      roomTimeoutRef.current = setTimeout(() => {
+        setConnectionState("connected");
+        const msg =
+          operation === "create"
+            ? "Room creation timed out. Please try again."
+            : "Unable to join room. Request timed out. Please try again.";
+        setErrorMessage(msg);
+      }, ROOM_OPERATION_TIMEOUT_MS);
+    },
+    [clearRoomTimeout]
+  );
+
   // Send message helper
   const sendMessage = useCallback(<T>(type: string, payload: T): string | null => {
     const ws = socketRef.current;
@@ -102,13 +159,36 @@ export function useOnlineTicTacToe() {
 
   // Connect to WebSocket server
   const connect = useCallback(() => {
-    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+    if (
+      socketRef.current &&
+      (socketRef.current.readyState === WebSocket.OPEN ||
+        socketRef.current.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
-    setConnectionState((prev) => (prev === "disconnected" || prev === "connection_failed" ? "connecting" : prev));
+    setConnectionState((prev) =>
+      prev === "disconnected" || prev === "connection_failed" ? "connecting" : prev
+    );
     setErrorMessage(null);
     manualDisconnectRef.current = false;
+
+    // Start connection timeout (10 seconds)
+    clearConnectionTimeout();
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (socketRef.current && socketRef.current.readyState !== WebSocket.OPEN) {
+        try {
+          socketRef.current.close();
+        } catch {
+          // ignore
+        }
+        socketRef.current = null;
+      }
+      clearRoomTimeout();
+      pendingActionRef.current = null;
+      setConnectionState("connection_failed");
+      setErrorMessage("Unable to connect to the multiplayer server. Please try again.");
+    }, CONNECTION_TIMEOUT_MS);
 
     const wsUrl = getMultiplayerWsUrl();
     const ws = new WebSocket(wsUrl);
@@ -134,13 +214,16 @@ export function useOnlineTicTacToe() {
     };
 
     ws.onclose = (event) => {
+      clearConnectionTimeout();
+      clearRoomTimeout();
       socketRef.current = null;
+
       if (manualDisconnectRef.current) {
         setConnectionState("disconnected");
         return;
       }
 
-      // Check if we were in an active match
+      // Check if we were in an active match and should attempt reconnect
       const storedRoom = getStoredRoomInfo();
       if (storedRoom && reconnectAttemptsRef.current < 5) {
         setConnectionState("reconnecting");
@@ -152,153 +235,208 @@ export function useOnlineTicTacToe() {
           }
         }, delay);
       } else {
+        pendingActionRef.current = null;
         setConnectionState(event.code === 1000 ? "disconnected" : "connection_failed");
         if (storedRoom && reconnectAttemptsRef.current >= 5) {
           setStoredRoomInfo(null);
           setErrorMessage("Connection to match lost. Grace period expired.");
+        } else if (event.code !== 1000) {
+          setErrorMessage("Unable to connect to the multiplayer server. Please try again.");
         }
       }
     };
 
     ws.onerror = () => {
-      // Handled by onclose
+      // WebSocket close handler fires immediately after error
     };
-  }, [sendMessage]);
+  }, [clearConnectionTimeout, clearRoomTimeout, sendMessage]);
 
   // Handle incoming server message envelope
-  const handleServerMessage = useCallback((envelope: ServerEnvelope) => {
-    switch (envelope.type) {
-      case "session.ready": {
-        const payload = envelope.payload as { playerId: string; sessionToken: string };
-        setMyPlayerId(payload.playerId);
-        setStoredSessionToken(payload.sessionToken);
+  const handleServerMessage = useCallback(
+    (envelope: ServerEnvelope) => {
+      switch (envelope.type) {
+        case "session.ready": {
+          clearConnectionTimeout();
+          const payload = envelope.payload as { playerId: string; sessionToken: string };
+          setMyPlayerId(payload.playerId);
+          setStoredSessionToken(payload.sessionToken);
 
-        // Check if there is an active room we should reconnect to
-        const storedRoom = getStoredRoomInfo();
-        if (storedRoom) {
-          setConnectionState("reconnecting");
-          sendMessage("room.reconnect", {
-            roomCode: storedRoom.roomCode,
-            reconnectToken: storedRoom.reconnectToken,
-          });
-        } else {
-          setConnectionState("connected");
+          // If a pending user action exists (e.g. Create Room or Join Match), execute it
+          // and clear any stale active room so it does not hijack the user's fresh intent.
           if (pendingActionRef.current) {
+            setStoredRoomInfo(null);
+            setConnectionState("connected");
             const action = pendingActionRef.current;
             pendingActionRef.current = null;
             action();
-          }
-        }
-        break;
-      }
-
-      case "room.created": {
-        const payload = envelope.payload as { room: RoomDto; reconnectToken: string };
-        setRoom(payload.room);
-        setStoredRoomInfo({
-          roomId: payload.room.roomId,
-          roomCode: payload.room.roomCode,
-          reconnectToken: payload.reconnectToken,
-        });
-        setConnectionState("waiting_for_opponent");
-        setErrorMessage(null);
-        break;
-      }
-
-      case "room.joined": {
-        const payload = envelope.payload as { room: RoomDto; reconnectToken: string };
-        setRoom(payload.room);
-        setStoredRoomInfo({
-          roomId: payload.room.roomId,
-          roomCode: payload.room.roomCode,
-          reconnectToken: payload.reconnectToken,
-        });
-
-        if (payload.room.gameState) {
-          const state = payload.room.gameState as OnlineTicTacToeState;
-          setGameState(state);
-          if (state.status === "won" || state.status === "draw") {
-            setConnectionState("game_over");
           } else {
-            setConnectionState("in_game");
+            const storedRoom = getStoredRoomInfo();
+            if (storedRoom) {
+              setConnectionState("reconnecting");
+              sendMessage("room.reconnect", {
+                roomCode: storedRoom.roomCode,
+                reconnectToken: storedRoom.reconnectToken,
+              });
+            } else {
+              setConnectionState("connected");
+            }
           }
-        } else if (payload.room.players.length >= 2) {
-          setConnectionState("in_game");
-        } else {
+          break;
+        }
+
+        case "room.created": {
+          clearRoomTimeout();
+          const payload = envelope.payload as { room: RoomDto; reconnectToken: string };
+          setRoom(payload.room);
+          setStoredRoomInfo({
+            roomId: payload.room.roomId,
+            roomCode: payload.room.roomCode,
+            reconnectToken: payload.reconnectToken,
+          });
           setConnectionState("waiting_for_opponent");
+          setErrorMessage(null);
+          break;
         }
-        setErrorMessage(null);
-        break;
-      }
 
-      case "room.updated": {
-        const payload = envelope.payload as {
-          room: RoomDto;
-          reason?: string;
-        };
-        setRoom(payload.room);
+        case "room.joined": {
+          clearRoomTimeout();
+          const payload = envelope.payload as { room: RoomDto; reconnectToken: string };
+          setRoom(payload.room);
+          setStoredRoomInfo({
+            roomId: payload.room.roomId,
+            roomCode: payload.room.roomCode,
+            reconnectToken: payload.reconnectToken,
+          });
 
-        if (payload.room.gameState) {
-          const state = payload.room.gameState as OnlineTicTacToeState;
-          setGameState(state);
-          if (state.status === "won" || state.status === "draw") {
-            setConnectionState("game_over");
+          if (payload.room.gameState) {
+            const state = payload.room.gameState as OnlineTicTacToeState;
+            setGameState(state);
+            setConnectionState(
+              state.status === "won" || state.status === "draw" ? "game_over" : "in_game"
+            );
+          } else if (payload.room.players.length >= 2) {
+            // Both players in room: ensure immediate entry even if game.state packet is slightly delayed
+            const hostPlayer =
+              payload.room.players.find((p) => p.seat === 0) || payload.room.players[0];
+            const guestPlayer =
+              payload.room.players.find((p) => p.seat === 1) || payload.room.players[1];
+            const marks: Record<string, PlayerMark> = {};
+            if (hostPlayer) marks[hostPlayer.playerId] = "X";
+            if (guestPlayer) marks[guestPlayer.playerId] = "O";
+
+            setGameState({
+              board: Array(9).fill(null),
+              currentPlayer: "X",
+              startingPlayer: "X",
+              status: "in_progress",
+              winner: null,
+              winningLine: null,
+              moveCount: 0,
+              playerMarks: marks,
+              rematchRequests: [],
+            });
+            setConnectionState("in_game");
           } else {
+            setConnectionState("waiting_for_opponent");
+          }
+          setErrorMessage(null);
+          break;
+        }
+
+        case "room.updated": {
+          const payload = envelope.payload as {
+            room: RoomDto;
+            reason?: string;
+          };
+          setRoom(payload.room);
+
+          if (payload.room.gameState) {
+            const state = payload.room.gameState as OnlineTicTacToeState;
+            setGameState(state);
+            setConnectionState(
+              state.status === "won" || state.status === "draw" ? "game_over" : "in_game"
+            );
+          } else if (payload.room.status === "in-progress" || payload.room.players.length >= 2) {
+            setGameState((prev) => {
+              if (prev) return prev;
+              const hostPlayer =
+                payload.room.players.find((p) => p.seat === 0) || payload.room.players[0];
+              const guestPlayer =
+                payload.room.players.find((p) => p.seat === 1) || payload.room.players[1];
+              const marks: Record<string, PlayerMark> = {};
+              if (hostPlayer) marks[hostPlayer.playerId] = "X";
+              if (guestPlayer) marks[guestPlayer.playerId] = "O";
+              return {
+                board: Array(9).fill(null),
+                currentPlayer: "X",
+                startingPlayer: "X",
+                status: "in_progress",
+                winner: null,
+                winningLine: null,
+                moveCount: 0,
+                playerMarks: marks,
+                rematchRequests: [],
+              };
+            });
             setConnectionState("in_game");
           }
-        } else if (payload.room.status === "in-progress" || payload.room.players.length >= 2) {
-          setConnectionState("in_game");
+
+          // Update opponent connectivity status
+          if (payload.reason === "player_disconnected") {
+            setIsOpponentConnected(false);
+          } else if (payload.reason === "player_reconnected" || payload.reason === "player_joined") {
+            setIsOpponentConnected(true);
+          } else if (payload.reason === "player_left") {
+            setIsOpponentConnected(false);
+          }
+          break;
         }
 
-        // Update opponent connectivity status
-        if (payload.reason === "player_disconnected") {
-          setIsOpponentConnected(false);
-        } else if (payload.reason === "player_reconnected" || payload.reason === "player_joined") {
-          setIsOpponentConnected(true);
-        } else if (payload.reason === "player_left") {
-          setIsOpponentConnected(false);
+        case "game.state": {
+          clearRoomTimeout();
+          const payload = envelope.payload as {
+            roomId: string;
+            version: number;
+            gameState: OnlineTicTacToeState;
+          };
+          setGameState(payload.gameState);
+          setConnectionState(
+            payload.gameState.status === "won" || payload.gameState.status === "draw"
+              ? "game_over"
+              : "in_game"
+          );
+          break;
         }
-        break;
-      }
 
-      case "game.state": {
-        const payload = envelope.payload as {
-          roomId: string;
-          version: number;
-          gameState: OnlineTicTacToeState;
-        };
-        setGameState(payload.gameState);
-        if (payload.gameState.status === "won" || payload.gameState.status === "draw") {
-          setConnectionState("game_over");
-        } else {
-          setConnectionState("in_game");
-        }
-        break;
-      }
-
-      case "room.left": {
-        setRoom(null);
-        setGameState(null);
-        setStoredRoomInfo(null);
-        setConnectionState("connected");
-        break;
-      }
-
-      case "room.error": {
-        const payload = envelope.payload as { code: string; message: string };
-        setErrorMessage(payload.message || "An error occurred");
-        if (payload.code === "ROOM_NOT_FOUND" || payload.code === "ROOM_FULL" || payload.code === "INVALID_ROOM_STATE") {
-          setConnectionState("connected");
-        } else if (payload.code === "RECONNECT_EXPIRED" || payload.code === "INVALID_SESSION") {
-          setStoredRoomInfo(null);
+        case "room.left": {
+          clearRoomTimeout();
           setRoom(null);
           setGameState(null);
+          setStoredRoomInfo(null);
           setConnectionState("connected");
+          break;
         }
-        break;
+
+        case "room.error": {
+          clearRoomTimeout();
+          const payload = envelope.payload as { code: string; message: string };
+          const friendlyMessage = formatRoomErrorMessage(payload.code, payload.message);
+          setErrorMessage(friendlyMessage);
+
+          if (payload.code === "RECONNECT_EXPIRED" || payload.code === "INVALID_SESSION") {
+            setStoredRoomInfo(null);
+            setRoom(null);
+            setGameState(null);
+          }
+
+          // Always return to connected state so user can immediately retry
+          setConnectionState("connected");
+          break;
+        }
       }
-    }
-  }, [sendMessage]);
+    },
+    [clearConnectionTimeout, clearRoomTimeout, sendMessage]
+  );
 
   useEffect(() => {
     connectRef.current = connect;
@@ -307,7 +445,10 @@ export function useOnlineTicTacToe() {
 
   // Clean disconnect
   const disconnect = useCallback(() => {
+    clearConnectionTimeout();
+    clearRoomTimeout();
     manualDisconnectRef.current = true;
+    pendingActionRef.current = null;
     setStoredRoomInfo(null);
     if (socketRef.current) {
       socketRef.current.close(1000, "User departed");
@@ -317,13 +458,14 @@ export function useOnlineTicTacToe() {
     setRoom(null);
     setGameState(null);
     setErrorMessage(null);
-  }, []);
+  }, [clearConnectionTimeout, clearRoomTimeout]);
 
   // Create room
   const createRoom = useCallback(() => {
     setErrorMessage(null);
     const doCreate = () => {
       setConnectionState("creating_room");
+      startRoomTimeout("create");
       sendMessage("room.create", {
         gameId: "tic-tac-toe",
         maxPlayers: 2,
@@ -333,43 +475,54 @@ export function useOnlineTicTacToe() {
     if (connectionState === "connected") {
       doCreate();
     } else {
+      setConnectionState("creating_room");
+      startRoomTimeout("create");
       pendingActionRef.current = doCreate;
       connect();
     }
-  }, [connectionState, connect, sendMessage]);
+  }, [connectionState, connect, sendMessage, startRoomTimeout]);
 
   // Join room
-  const joinRoom = useCallback((roomCode: string) => {
-    const cleanCode = roomCode.trim().toUpperCase();
-    if (cleanCode.length === 0) {
-      setErrorMessage("Please enter a room code");
-      return;
-    }
-    setErrorMessage(null);
+  const joinRoom = useCallback(
+    (roomCode: string) => {
+      const cleanCode = roomCode.trim().toUpperCase();
+      if (cleanCode.length === 0) {
+        setErrorMessage("Please enter a room code");
+        return;
+      }
+      setErrorMessage(null);
 
-    const doJoin = () => {
-      setConnectionState("joining_room");
-      sendMessage("room.join", {
-        roomCode: cleanCode,
-      });
-    };
+      const doJoin = () => {
+        setConnectionState("joining_room");
+        startRoomTimeout("join");
+        sendMessage("room.join", {
+          roomCode: cleanCode,
+        });
+      };
 
-    if (connectionState === "connected") {
-      doJoin();
-    } else {
-      pendingActionRef.current = doJoin;
-      connect();
-    }
-  }, [connectionState, connect, sendMessage]);
+      if (connectionState === "connected") {
+        doJoin();
+      } else {
+        setConnectionState("joining_room");
+        startRoomTimeout("join");
+        pendingActionRef.current = doJoin;
+        connect();
+      }
+    },
+    [connectionState, connect, sendMessage, startRoomTimeout]
+  );
 
   // Send move intent
-  const sendMove = useCallback((position: number) => {
-    if (!room) return;
-    sendMessage("game.move", {
-      roomId: room.roomId,
-      position,
-    });
-  }, [room, sendMessage]);
+  const sendMove = useCallback(
+    (position: number) => {
+      if (!room) return;
+      sendMessage("game.move", {
+        roomId: room.roomId,
+        position,
+      });
+    },
+    [room, sendMessage]
+  );
 
   // Request rematch
   const requestRematch = useCallback(() => {
@@ -381,6 +534,7 @@ export function useOnlineTicTacToe() {
 
   // Leave room
   const leaveRoom = useCallback(() => {
+    clearRoomTimeout();
     if (room) {
       sendMessage("room.leave", { roomId: room.roomId });
     }
@@ -389,36 +543,40 @@ export function useOnlineTicTacToe() {
     setGameState(null);
     setErrorMessage(null);
     setConnectionState("connected");
-  }, [room, sendMessage]);
+  }, [clearRoomTimeout, room, sendMessage]);
 
   // Auto-cleanup on unmount
   useEffect(() => {
     return () => {
+      clearConnectionTimeout();
+      clearRoomTimeout();
       manualDisconnectRef.current = true;
       if (socketRef.current) {
         socketRef.current.close();
       }
     };
-  }, []);
+  }, [clearConnectionTimeout, clearRoomTimeout]);
 
   // Derived properties
-  const myMark: PlayerMark | null = myPlayerId && gameState?.playerMarks?.[myPlayerId]
-    ? gameState.playerMarks[myPlayerId]
-    : room && myPlayerId
-    ? room.hostPlayerId === myPlayerId
-      ? "X"
-      : "O"
-    : null;
+  const myMark: PlayerMark | null =
+    myPlayerId && gameState?.playerMarks?.[myPlayerId]
+      ? gameState.playerMarks[myPlayerId]
+      : room && myPlayerId
+      ? room.hostPlayerId === myPlayerId
+        ? "X"
+        : "O"
+      : null;
 
-  const opponentPlayer: RoomPlayerDto | null = room && myPlayerId
-    ? room.players.find((p) => p.playerId !== myPlayerId) ?? null
-    : null;
+  const opponentPlayer: RoomPlayerDto | null =
+    room && myPlayerId
+      ? room.players.find((p) => p.playerId !== myPlayerId) ?? null
+      : null;
 
   const isMyTurn = Boolean(
     myMark &&
-    gameState &&
-    gameState.status === "in_progress" &&
-    gameState.currentPlayer === myMark
+      gameState &&
+      gameState.status === "in_progress" &&
+      gameState.currentPlayer === myMark
   );
 
   const winnerMark: PlayerMark | null = gameState?.winner ?? null;

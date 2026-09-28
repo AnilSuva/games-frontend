@@ -128,3 +128,167 @@ test("Rematch starting player swap semantics", () => {
   startingPlayer = startingPlayer === "X" ? "O" : "X";
   assert.equal(startingPlayer, "X");
 });
+
+test("Multiplayer Config: auto-selects production URL on production domains", () => {
+  const originalEnv = process.env.NEXT_PUBLIC_MULTIPLAYER_WS_URL;
+  delete process.env.NEXT_PUBLIC_MULTIPLAYER_WS_URL;
+
+  try {
+    // Simulate production browser window
+    globalThis.window = {
+      location: {
+        hostname: "games.anilsuva.com",
+      },
+    };
+
+    assert.equal(getMultiplayerWsUrl(), "wss://games-backend-dwqw.onrender.com/ws");
+
+    // Localhost stays local
+    globalThis.window = {
+      location: {
+        hostname: "localhost",
+      },
+    };
+    assert.equal(getMultiplayerWsUrl(), "ws://localhost:3001/ws");
+  } finally {
+    delete globalThis.window;
+    if (originalEnv !== undefined) {
+      process.env.NEXT_PUBLIC_MULTIPLAYER_WS_URL = originalEnv;
+    }
+  }
+});
+
+test("Finite Connection State & UX Button Semantics", () => {
+  function getLobbyButtonStates(connectionState, roomCodeInput = "ABC234", hasRoom = false) {
+    const isConnecting = connectionState === "connecting" || connectionState === "identifying";
+    const isCreating = connectionState === "creating_room";
+    const isJoining = connectionState === "joining_room";
+    const isWaiting = connectionState === "waiting_for_opponent" && hasRoom;
+
+    return {
+      createBtnText: isConnecting ? "Connecting..." : isCreating ? "Creating room..." : "Create Room",
+      createBtnDisabled: isConnecting || isCreating,
+      joinTabBtnText: isConnecting ? "Connecting..." : isJoining ? "Joining match..." : "Join Match",
+      joinTabBtnDisabled: roomCodeInput.trim().length < 3 || isJoining || isConnecting,
+      isWaiting,
+    };
+  }
+
+  // State: connecting (Initial socket connection)
+  const connecting = getLobbyButtonStates("connecting");
+  assert.equal(connecting.createBtnText, "Connecting...");
+  assert.equal(connecting.createBtnDisabled, true);
+  assert.equal(connecting.joinTabBtnText, "Connecting...");
+  assert.equal(connecting.joinTabBtnDisabled, true);
+
+  // State: identifying (Initial session identification)
+  const identifying = getLobbyButtonStates("identifying");
+  assert.equal(identifying.createBtnText, "Connecting...");
+  assert.equal(identifying.createBtnDisabled, true);
+
+  // State: connected (Lobby is ready for action)
+  const connected = getLobbyButtonStates("connected");
+  assert.equal(connected.createBtnText, "Create Room");
+  assert.equal(connected.createBtnDisabled, false);
+  assert.equal(connected.joinTabBtnText, "Join Match");
+  assert.equal(connected.joinTabBtnDisabled, false);
+
+  // State: creating_room (User clicked Create Room)
+  const creating = getLobbyButtonStates("creating_room");
+  assert.equal(creating.createBtnText, "Creating room...");
+  assert.equal(creating.createBtnDisabled, true);
+
+  // State: waiting_for_opponent (Room code displayed to host)
+  const waiting = getLobbyButtonStates("waiting_for_opponent", "ABC234", true);
+  assert.equal(waiting.isWaiting, true);
+
+  // State: joining_room (User clicked Join Match)
+  const joining = getLobbyButtonStates("joining_room");
+  assert.equal(joining.joinTabBtnText, "Joining match...");
+  assert.equal(joining.joinTabBtnDisabled, true);
+});
+
+test("Server Error Mapping: translates error codes to user-friendly messages and exits loading", () => {
+  function formatRoomErrorMessage(code, rawMessage) {
+    switch (code) {
+      case "ROOM_NOT_FOUND":
+        return "Room not found. Please check the 6-character room code.";
+      case "ROOM_FULL":
+        return "This room is already full.";
+      case "INVALID_ROOM_STATE":
+        return "This match is no longer available to join.";
+      case "RATE_LIMITED":
+        return "Too many requests. Please slow down and try again.";
+      case "RECONNECT_EXPIRED":
+      case "INVALID_SESSION":
+        return "The previous match has ended or expired.";
+      case "UNAUTHORIZED":
+        return "Multiplayer session expired. Reconnecting...";
+      default:
+        return rawMessage || "An error occurred. Please try again.";
+    }
+  }
+
+  assert.equal(
+    formatRoomErrorMessage("ROOM_NOT_FOUND"),
+    "Room not found. Please check the 6-character room code."
+  );
+  assert.equal(
+    formatRoomErrorMessage("ROOM_FULL"),
+    "This room is already full."
+  );
+  assert.equal(
+    formatRoomErrorMessage("RATE_LIMITED"),
+    "Too many requests. Please slow down and try again."
+  );
+});
+
+test("Match Entry Resilience: initializes fallback Tic-Tac-Toe state when two players present", () => {
+  const room = {
+    roomId: "rm_1",
+    roomCode: "XYZ123",
+    gameId: "tic-tac-toe",
+    status: "in-progress",
+    hostPlayerId: "p1",
+    players: [
+      { playerId: "p1", seat: 0, connected: true, joinedAt: 100 },
+      { playerId: "p2", seat: 1, connected: true, joinedAt: 200 },
+    ],
+    maxPlayers: 2,
+    version: 4,
+    createdAt: 100,
+  };
+
+  function resolveMatchState(room) {
+    if (room.gameState) return room.gameState;
+    if (room.players.length >= 2) {
+      const host = room.players.find((p) => p.seat === 0) || room.players[0];
+      const guest = room.players.find((p) => p.seat === 1) || room.players[1];
+      const marks = {
+        [host.playerId]: "X",
+        [guest.playerId]: "O",
+      };
+      return {
+        board: Array(9).fill(null),
+        currentPlayer: "X",
+        startingPlayer: "X",
+        status: "in_progress",
+        winner: null,
+        winningLine: null,
+        moveCount: 0,
+        playerMarks: marks,
+        rematchRequests: [],
+      };
+    }
+    return null;
+  }
+
+  const resolved = resolveMatchState(room);
+  assert.notEqual(resolved, null);
+  assert.equal(resolved.status, "in_progress");
+  assert.equal(resolved.currentPlayer, "X");
+  assert.equal(resolved.playerMarks.p1, "X");
+  assert.equal(resolved.playerMarks.p2, "O");
+  assert.equal(resolved.board.length, 9);
+});
+

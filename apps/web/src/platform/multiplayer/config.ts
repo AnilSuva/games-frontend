@@ -6,6 +6,7 @@
  * wss://games-backend-dwqw.onrender.com/ws
  */
 
+const DEFAULT_PROD_WS_URL = "wss://games-backend-dwqw.onrender.com/ws";
 const DEFAULT_LOCAL_WS_URL = "ws://localhost:3001/ws";
 
 export function getMultiplayerWsUrl(): string {
@@ -13,5 +14,19 @@ export function getMultiplayerWsUrl(): string {
   if (envUrl && envUrl.length > 0) {
     return envUrl;
   }
+
+  // Prevent deployed browser production from accidentally falling back to localhost
+  if (typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    const isLocal =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "";
+    if (!isLocal) {
+      return DEFAULT_PROD_WS_URL;
+    }
+  }
+
   return DEFAULT_LOCAL_WS_URL;
 }

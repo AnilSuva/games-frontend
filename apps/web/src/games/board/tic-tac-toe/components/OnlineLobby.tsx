@@ -27,9 +27,10 @@ export function OnlineLobby({
   const [roomCodeInput, setRoomCodeInput] = useState<string>("");
   const [copied, setCopied] = useState<boolean>(false);
 
-  const isCreating = connectionState === "creating_room" || connectionState === "identifying" || connectionState === "connecting";
-  const isWaiting = connectionState === "waiting_for_opponent" && Boolean(room);
+  const isConnecting = connectionState === "connecting" || connectionState === "identifying";
+  const isCreating = connectionState === "creating_room";
   const isJoining = connectionState === "joining_room";
+  const isWaiting = connectionState === "waiting_for_opponent" && Boolean(room);
 
   const handleCopyCode = async () => {
     if (!room?.roomCode) return;
@@ -39,13 +40,13 @@ export function OnlineLobby({
       soundManager.play("buttonClick");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
+      // Clipboard fallback
     }
   };
 
   const handleJoinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomCodeInput.trim().length >= 3) {
+    if (roomCodeInput.trim().length >= 3 && !isJoining && !isConnecting) {
       soundManager.play("buttonClick");
       onJoinRoom(roomCodeInput.trim().toUpperCase());
     }
@@ -119,24 +120,29 @@ export function OnlineLobby({
             maxLength={10}
             autoFocus
             disabled={isJoining}
-            className="w-full px-4 py-3 text-center font-mono text-xl font-bold tracking-widest text-[#1c1917] bg-white border border-[#e6e3dc] rounded-xl focus:outline-none focus:border-[#1c1917] transition placeholder:text-[#9c978e] placeholder:tracking-normal placeholder:font-normal placeholder:text-sm"
+            className="w-full px-4 py-3 text-center font-mono text-xl font-bold tracking-widest text-[#1c1917] bg-white border border-[#e6e3dc] rounded-xl focus:outline-none focus:border-[#1c1917] transition placeholder:text-[#9c978e] placeholder:tracking-normal placeholder:font-normal placeholder:text-sm disabled:bg-[#f7f5f0] disabled:text-[#9c978e]"
           />
 
           {errorMessage && (
-            <p className="text-xs font-medium text-[#dc2626] text-center">
+            <div className="w-full p-2.5 text-xs font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] rounded-lg text-center">
               {errorMessage}
-            </p>
+            </div>
           )}
 
           <button
             type="submit"
-            disabled={roomCodeInput.trim().length < 3 || isJoining}
+            disabled={roomCodeInput.trim().length < 3 || isJoining || isConnecting}
             className="w-full py-2.5 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
           >
-            {isJoining ? (
+            {isConnecting ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Joining...</span>
+                <span>Connecting...</span>
+              </>
+            ) : isJoining ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Joining match...</span>
               </>
             ) : (
               <span>Join Match</span>
@@ -150,7 +156,8 @@ export function OnlineLobby({
             soundManager.play("buttonClick");
             setTab("choose");
           }}
-          className="mt-4 text-xs text-[#6b665f] hover:text-[#1c1917] underline underline-offset-4 cursor-pointer"
+          disabled={isJoining}
+          className="mt-4 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer"
         >
           ← Back
         </button>
@@ -182,13 +189,18 @@ export function OnlineLobby({
             soundManager.play("buttonClick");
             onCreateRoom();
           }}
-          disabled={isCreating}
-          className="w-full py-3 px-4 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+          disabled={isConnecting || isCreating}
+          className="w-full py-3 px-4 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
         >
-          {isCreating ? (
+          {isConnecting ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Creating Room...</span>
+              <span>Connecting...</span>
+            </>
+          ) : isCreating ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Creating room...</span>
             </>
           ) : (
             <span>Create Room</span>
@@ -201,8 +213,8 @@ export function OnlineLobby({
             soundManager.play("buttonClick");
             setTab("join");
           }}
-          disabled={isCreating}
-          className="w-full py-3 px-4 text-xs font-semibold text-[#1c1917] bg-white hover:bg-[#f7f5f0] border border-[#e6e3dc] rounded-xl transition shadow-xs cursor-pointer"
+          disabled={isConnecting || isCreating}
+          className="w-full py-3 px-4 text-xs font-semibold text-[#1c1917] bg-white hover:bg-[#f7f5f0] disabled:bg-[#f7f5f0] disabled:text-[#9c978e] disabled:cursor-not-allowed border border-[#e6e3dc] rounded-xl transition shadow-xs cursor-pointer"
         >
           Join Room
         </button>
@@ -214,7 +226,8 @@ export function OnlineLobby({
           soundManager.play("buttonClick");
           onReturnToModes();
         }}
-        className="mt-5 text-xs text-[#6b665f] hover:text-[#1c1917] underline underline-offset-4 cursor-pointer"
+        disabled={isCreating}
+        className="mt-5 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer"
       >
         ← Back to Modes
       </button>

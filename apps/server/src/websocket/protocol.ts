@@ -75,6 +75,8 @@ export async function handleClientMessage(
       connection.sessionToken = session.sessionToken;
       connectionTracker.bindPlayerId(connection.connectionId, session.playerId);
 
+      logger.info({ playerId: session.playerId, connectionId: connection.connectionId }, "Session identified and ready");
+
       connection.send<SessionReadyPayload>({
         version: PROTOCOL_VERSION,
         type: "session.ready",
@@ -185,6 +187,7 @@ export async function handleClientMessage(
 
       // If game state is active, broadcast game.state to all players
       if (room.gameState) {
+        logger.info({ roomId: room.id, roomCode: room.code }, "Broadcasting authoritative game.state to room players");
         broadcastToRoom<GameStatePayload>(
           room,
           {
