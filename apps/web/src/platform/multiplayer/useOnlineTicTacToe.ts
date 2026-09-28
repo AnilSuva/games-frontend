@@ -443,22 +443,47 @@ export function useOnlineTicTacToe() {
     handleServerMessageRef.current = handleServerMessage;
   }, [connect, handleServerMessage]);
 
-  // Clean disconnect
+  // Clean disconnect & leave active room
   const disconnect = useCallback(() => {
     clearConnectionTimeout();
     clearRoomTimeout();
     manualDisconnectRef.current = true;
     pendingActionRef.current = null;
+
+    const ws = socketRef.current;
+    const storedRoom = getStoredRoomInfo();
+    const targetRoomId = room?.roomId ?? storedRoom?.roomId;
+
+    if (ws && ws.readyState === WebSocket.OPEN && targetRoomId) {
+      try {
+        const envelope: ClientEnvelope<{ roomId: string }> = {
+          version: 1,
+          type: "room.leave",
+          requestId: nextRequestId(),
+          payload: { roomId: targetRoomId },
+        };
+        ws.send(JSON.stringify(envelope));
+      } catch {
+        // Safe if socket send fails
+      }
+    }
+
     setStoredRoomInfo(null);
-    if (socketRef.current) {
-      socketRef.current.close(1000, "User departed");
+
+    if (ws) {
+      try {
+        ws.close(1000, "User departed");
+      } catch {
+        // ignore
+      }
       socketRef.current = null;
     }
+
     setConnectionState("disconnected");
     setRoom(null);
     setGameState(null);
     setErrorMessage(null);
-  }, [clearConnectionTimeout, clearRoomTimeout]);
+  }, [clearConnectionTimeout, clearRoomTimeout, room]);
 
   // Create room
   const createRoom = useCallback(() => {
@@ -564,8 +589,10 @@ export function useOnlineTicTacToe() {
   // Leave room
   const leaveRoom = useCallback(() => {
     clearRoomTimeout();
-    if (room) {
-      sendMessage("room.leave", { roomId: room.roomId });
+    const storedRoom = getStoredRoomInfo();
+    const targetRoomId = room?.roomId ?? storedRoom?.roomId;
+    if (targetRoomId) {
+      sendMessage("room.leave", { roomId: targetRoomId });
     }
     setStoredRoomInfo(null);
     setRoom(null);
@@ -574,14 +601,45 @@ export function useOnlineTicTacToe() {
     setConnectionState("connected");
   }, [clearRoomTimeout, room, sendMessage]);
 
-  // Auto-cleanup on unmount
+  const roomRef = useRef<RoomDto | null>(null);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  // Auto-cleanup on unmount (e.g. user navigates Home or away from the game)
   useEffect(() => {
     return () => {
       clearConnectionTimeout();
       clearRoomTimeout();
       manualDisconnectRef.current = true;
-      if (socketRef.current) {
-        socketRef.current.close();
+
+      const ws = socketRef.current;
+      const storedRoom = getStoredRoomInfo();
+      const targetRoomId = roomRef.current?.roomId ?? storedRoom?.roomId;
+
+      if (ws && ws.readyState === WebSocket.OPEN && targetRoomId) {
+        try {
+          const envelope: ClientEnvelope<{ roomId: string }> = {
+            version: 1,
+            type: "room.leave",
+            requestId: nextRequestId(),
+            payload: { roomId: targetRoomId },
+          };
+          ws.send(JSON.stringify(envelope));
+        } catch {
+          // ignore
+        }
+      }
+
+      setStoredRoomInfo(null);
+
+      if (ws) {
+        try {
+          ws.close(1000, "Component unmounted");
+        } catch {
+          // ignore
+        }
+        socketRef.current = null;
       }
     };
   }, [clearConnectionTimeout, clearRoomTimeout]);
@@ -646,6 +704,7 @@ export function useOnlineTicTacToe() {
     opponentRequestedRematch,
     connect,
     disconnect,
+    exitMatch: disconnect,
     createRoom,
     joinRoom,
     sendMove,

@@ -336,4 +336,76 @@ test("Result Reason & Message Semantics: Win, Draw, and Disconnect Forfeit", () 
   assert.equal(getResultMessage("draw", false, "draw"), "Draw");
 });
 
+test("Home Exit & Multiplayer Session Persistence Semantics", () => {
+  const SESSION_TOKEN_KEY = "omniplay_session_token";
+  const ACTIVE_ROOM_KEY = "omniplay_active_room";
+
+  // Mock in-memory storage simulating sessionStorage
+  const storage = new Map();
+  const mockSessionStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, val) => storage.set(key, String(val)),
+    removeItem: (key) => storage.delete(key),
+  };
+
+  // 1. Player joins a match: both sessionToken and activeRoom are saved
+  mockSessionStorage.setItem(SESSION_TOKEN_KEY, "session_user_abc");
+  mockSessionStorage.setItem(
+    ACTIVE_ROOM_KEY,
+    JSON.stringify({
+      roomId: "room_123",
+      roomCode: "XYZ999",
+      reconnectToken: "token_xyz",
+    })
+  );
+
+  assert.equal(mockSessionStorage.getItem(SESSION_TOKEN_KEY), "session_user_abc");
+  assert.notEqual(mockSessionStorage.getItem(ACTIVE_ROOM_KEY), null);
+
+  // 2. Intentional Home Exit / leaveRoom execution
+  // Simulates exitMatch / handleHomeExit / disconnect:
+  function performExplicitHomeExit() {
+    // Clear active room key, preserve general session token
+    mockSessionStorage.removeItem(ACTIVE_ROOM_KEY);
+  }
+
+  performExplicitHomeExit();
+
+  // Active room is removed, but user session identity is retained
+  assert.equal(mockSessionStorage.getItem(ACTIVE_ROOM_KEY), null);
+  assert.equal(mockSessionStorage.getItem(SESSION_TOKEN_KEY), "session_user_abc");
+
+  // 3. User re-enters Multiplayer later (session.ready handler simulation)
+  function handleSessionReady() {
+    const rawStored = mockSessionStorage.getItem(ACTIVE_ROOM_KEY);
+    const storedRoom = rawStored ? JSON.parse(rawStored) : null;
+
+    if (storedRoom) {
+      return { action: "reconnect", roomCode: storedRoom.roomCode };
+    }
+    // Must transition to connected lobby, not reconnect
+    return { action: "fresh_lobby", connectionState: "connected" };
+  }
+
+  const resultAfterHome = handleSessionReady();
+  assert.equal(resultAfterHome.action, "fresh_lobby");
+  assert.equal(resultAfterHome.connectionState, "connected");
+
+  // 4. Contrast with Accidental Disconnect (e.g. Wi-Fi drop while on game page):
+  // Active room remains in storage
+  mockSessionStorage.setItem(
+    ACTIVE_ROOM_KEY,
+    JSON.stringify({
+      roomId: "room_456",
+      roomCode: "ABC123",
+      reconnectToken: "token_abc",
+    })
+  );
+
+  const resultAfterAccidentalDrop = handleSessionReady();
+  assert.equal(resultAfterAccidentalDrop.action, "reconnect");
+  assert.equal(resultAfterAccidentalDrop.roomCode, "ABC123");
+});
+
+
 

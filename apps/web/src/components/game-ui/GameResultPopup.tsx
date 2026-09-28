@@ -16,6 +16,8 @@ interface GameResultPopupProps {
   homeHref?: string;
   /** Optional custom label for the Play Again button */
   playAgainText?: string;
+  /** Optional callback invoked when the user clicks Home before navigation */
+  onHome?: () => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export function GameResultPopup({
   onClose,
   homeHref = "/",
   playAgainText = "Play Again",
+  onHome,
 }: GameResultPopupProps) {
   const handlePlayAgain = () => {
     soundManager.play("buttonClick");
@@ -42,6 +45,7 @@ export function GameResultPopup({
 
   const handleHomeClick = () => {
     soundManager.play("buttonClick");
+    onHome?.();
   };
 
   return (

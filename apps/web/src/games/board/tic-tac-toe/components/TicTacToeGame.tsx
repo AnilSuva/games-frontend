@@ -227,6 +227,10 @@ export default function TicTacToeGame({
     onLifecycleChange?.("pre-game");
   }, [onLifecycleChange, online]);
 
+  const handleHomeExit = useCallback(() => {
+    online.exitMatch();
+  }, [online]);
+
   // Connect platform pause/restart controller
   useEffect(() => {
     const controller: IGameController = {
@@ -528,6 +532,7 @@ export default function TicTacToeGame({
                 soundManager.play("buttonClick");
                 online.requestRematch();
               }}
+              onHome={handleHomeExit}
               playAgainText={
                 online.hasRequestedRematch
                   ? "Waiting for opponent..."

@@ -8,6 +8,7 @@ import type {
   RoomCreatedPayload,
   RoomErrorPayload,
   RoomJoinedPayload,
+  RoomLeftPayload,
   RoomUpdatedPayload,
   ServerEnvelope,
   SessionReadyPayload,
@@ -710,5 +711,100 @@ test("Tic-Tac-Toe Server Integration: Full match lifecycle, turns, anti-cheat, w
 
     wsHost.close();
     wsLateGuest.close();
+  });
+
+  await t.test("Explicit room.leave exit: cleans up room, notifies opponent with player_left, rejects stale reconnect, and permits fresh room creation", async () => {
+    // 1. Host identifies and creates Room 1
+    const wsHost = await createWsClient(wsUrl);
+    sendJson(wsHost, {
+      version: 1,
+      type: "session.identify",
+      requestId: "host_init_t6",
+      payload: { displayName: "HostUser" },
+    });
+    await waitForMessage<SessionReadyPayload>(wsHost, (e) => e.type === "session.ready");
+
+    sendJson(wsHost, {
+      version: 1,
+      type: "room.create",
+      requestId: "create_r1_t6",
+      payload: { gameId: "tic-tac-toe", maxPlayers: 2 },
+    });
+    const createdEnv = await waitForMessage<RoomCreatedPayload>(wsHost, (e) => e.type === "room.created");
+    const roomId1 = createdEnv.payload.room.roomId;
+    const roomCode1 = createdEnv.payload.room.roomCode;
+
+    // 2. Guest identifies and joins Room 1
+    const wsGuest = await createWsClient(wsUrl);
+    sendJson(wsGuest, {
+      version: 1,
+      type: "session.identify",
+      requestId: "guest_init_t6",
+      payload: { displayName: "GuestUser" },
+    });
+    await waitForMessage<SessionReadyPayload>(wsGuest, (e) => e.type === "session.ready");
+
+    const guestJoinPromise = waitForMessage<RoomJoinedPayload>(wsGuest, (e) => e.type === "room.joined");
+    const hostUpdatePromise = waitForMessage<RoomUpdatedPayload>(wsHost, (e) => e.type === "room.updated");
+    const guestStatePromise = waitForMessage<GameStatePayload>(wsGuest, (e) => e.type === "game.state");
+    const hostStatePromise = waitForMessage<GameStatePayload>(wsHost, (e) => e.type === "game.state");
+
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.join",
+      requestId: "join_r1_t6",
+      payload: { roomCode: roomCode1 },
+    });
+
+    const [joinedEnv] = await Promise.all([
+      guestJoinPromise,
+      hostUpdatePromise,
+      guestStatePromise,
+      hostStatePromise,
+    ]);
+    const guestOldToken = joinedEnv.payload.reconnectToken;
+
+    // 3. Guest explicitly leaves Room 1 (Home button / leave action)
+    const guestLeftPromise = waitForMessage<RoomLeftPayload>(wsGuest, (e) => e.type === "room.left");
+    const hostLeftPromise = waitForMessage<RoomUpdatedPayload>(wsHost, (e) => e.type === "room.updated");
+
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.leave",
+      requestId: "leave_r1_t6",
+      payload: { roomId: roomId1 },
+    });
+
+    const [guestLeft, hostNotified] = await Promise.all([
+      guestLeftPromise,
+      hostLeftPromise,
+    ]);
+
+    assert.equal(guestLeft.payload.roomId, roomId1);
+    assert.equal(hostNotified.payload.reason, "player_left");
+
+    // 4. Guest attempts to reconnect to the old room with stale token -> must be rejected
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.reconnect",
+      requestId: "reconnect_stale_t6",
+      payload: { roomCode: roomCode1, reconnectToken: guestOldToken },
+    });
+    const staleErr = await waitForMessage<RoomErrorPayload>(wsGuest, (e) => e.type === "room.error");
+    assert.ok(staleErr.payload.code === "RECONNECT_EXPIRED" || staleErr.payload.code === "INVALID_SESSION");
+
+    // 5. Guest creates a BRAND NEW room (Fresh lobby action)
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.create",
+      requestId: "create_r2_t6",
+      payload: { gameId: "tic-tac-toe", maxPlayers: 2 },
+    });
+    const newRoomEnv = await waitForMessage<RoomCreatedPayload>(wsGuest, (e) => e.type === "room.created");
+    assert.notEqual(newRoomEnv.payload.room.roomId, roomId1);
+    assert.notEqual(newRoomEnv.payload.room.roomCode, roomCode1);
+
+    wsHost.close();
+    wsGuest.close();
   });
 });
