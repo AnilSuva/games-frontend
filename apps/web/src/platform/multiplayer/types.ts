@@ -36,6 +36,12 @@ export interface RoomDto {
   gameState?: unknown;
 }
 
+export interface StoredRoomInfo {
+  roomId: string;
+  roomCode: string;
+  reconnectToken: string;
+}
+
 export interface WinningLine {
   line: [number, number, number];
   direction: "horizontal" | "vertical" | "diagonal";

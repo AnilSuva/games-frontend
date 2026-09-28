@@ -20,6 +20,13 @@ export interface GameAdapter<TState = unknown, TAction = unknown, TResult = unkn
   validateAction(state: TState, action: TAction, playerId: string): ValidationOutcome;
   applyAction(state: TState, action: TAction, playerId: string): ActionResult<TState, TResult>;
   serializeState?(state: TState, forPlayerId?: string): unknown;
+  handlePlayerDisconnect?(state: TState, playerId: string, graceExpiresAt: number): TState;
+  handlePlayerReconnect?(state: TState, playerId: string): TState;
+  handleForfeit?(
+    state: TState,
+    forfeitedPlayerId: string,
+    remainingPlayerIds: string[]
+  ): { nextState: TState; isCompleted: boolean };
 }
 
 /**

@@ -29,8 +29,8 @@ export async function buildApp(
   });
 
   const sessionStore = new InMemorySessionStore();
-  const roomManager = new RoomManager(config.disconnectGracePeriodMs);
   const gameRegistry = createDefaultGameRegistry();
+  const roomManager = new RoomManager(config.disconnectGracePeriodMs, gameRegistry);
 
   // Register HTTP routes
   await registerHttpRoutes(app);

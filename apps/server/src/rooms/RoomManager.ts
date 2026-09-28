@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { DEFAULT_MAX_PLAYERS, MAX_ALLOWED_PLAYERS } from "../config/constants.js";
 import { generateReconnectToken, generateRoomCode } from "../auth/identity.js";
 import type { ErrorCode } from "../types/index.js";
+import type { GameAdapterRegistry } from "../games/GameAdapter.js";
 import { Room } from "./Room.js";
 import { ReconnectManager } from "./reconnect.js";
 
@@ -16,7 +17,8 @@ export class RoomManager {
   private reconnectManager = new ReconnectManager();
 
   constructor(
-    private readonly disconnectGracePeriodMs: number = 30_000
+    private readonly disconnectGracePeriodMs: number = 30_000,
+    private readonly gameRegistry?: GameAdapterRegistry
   ) {}
 
   public getRoomById(roomId: string): Room | undefined {
@@ -182,12 +184,22 @@ export class RoomManager {
 
     room.markPlayerDisconnected(playerId);
 
-    // If an active game is in progress, pause and record authoritative disconnect grace expiry
-    const activeGameState = room.gameState as Record<string, any> | undefined;
-    if (activeGameState && activeGameState.status === "in_progress") {
-      activeGameState.disconnectGraceExpiresAt = Date.now() + this.disconnectGracePeriodMs;
-      activeGameState.disconnectedPlayerId = playerId;
+    // If an active game is in progress, allow the game adapter to pause and record disconnect grace expiry
+    const adapter = this.gameRegistry?.get(room.gameId);
+    if (adapter?.handlePlayerDisconnect && room.gameState) {
+      room.gameState = adapter.handlePlayerDisconnect(
+        room.gameState,
+        playerId,
+        Date.now() + this.disconnectGracePeriodMs
+      );
       room.touch();
+    } else {
+      const activeGameState = room.gameState as Record<string, unknown> | undefined;
+      if (activeGameState && activeGameState.status === "in_progress") {
+        activeGameState.disconnectGraceExpiresAt = Date.now() + this.disconnectGracePeriodMs;
+        activeGameState.disconnectedPlayerId = playerId;
+        room.touch();
+      }
     }
 
     this.reconnectManager.scheduleDisconnectCleanup(
@@ -200,20 +212,23 @@ export class RoomManager {
         const player = currentRoom.players.get(playerId);
         // Only trigger forfeit and remove if still disconnected
         if (player && !player.connected) {
-          const currentGameState = currentRoom.gameState as Record<string, any> | undefined;
-          if (currentGameState && currentGameState.status === "in_progress") {
-            const remainingPlayer = Array.from(currentRoom.players.values()).find(
-              (p) => p.playerId !== playerId && p.connected
-            );
-            if (remainingPlayer && currentGameState.playerMarks) {
-              const winnerMark = currentGameState.playerMarks[remainingPlayer.playerId];
-              currentGameState.status = "won";
-              currentGameState.winner = winnerMark;
-              currentGameState.resultReason = "disconnect_forfeit";
-              currentGameState.disconnectGraceExpiresAt = null;
-              currentGameState.disconnectedPlayerId = null;
-              currentRoom.status = "completed";
-              currentRoom.touch();
+          const currentAdapter = this.gameRegistry?.get(currentRoom.gameId);
+          if (currentRoom.gameState) {
+            const remainingPlayerIds = Array.from(currentRoom.players.values())
+              .filter((p) => p.playerId !== playerId && p.connected)
+              .map((p) => p.playerId);
+
+            if (currentAdapter?.handleForfeit) {
+              const forfeitOutcome = currentAdapter.handleForfeit(
+                currentRoom.gameState,
+                playerId,
+                remainingPlayerIds
+              );
+              currentRoom.gameState = forfeitOutcome.nextState;
+              if (forfeitOutcome.isCompleted) {
+                currentRoom.status = "completed";
+                currentRoom.touch();
+              }
             }
           }
 
@@ -275,12 +290,18 @@ export class RoomManager {
       };
     }
 
-    // Clear disconnect grace period on successful match reconnect
-    const activeGameState = room.gameState as Record<string, any> | undefined;
-    if (activeGameState) {
-      activeGameState.disconnectGraceExpiresAt = null;
-      activeGameState.disconnectedPlayerId = null;
+    // Clear disconnect grace period on successful match reconnect via adapter or fallback
+    const adapter = this.gameRegistry?.get(room.gameId);
+    if (adapter?.handlePlayerReconnect && room.gameState) {
+      room.gameState = adapter.handlePlayerReconnect(room.gameState, playerId);
       room.touch();
+    } else {
+      const activeGameState = room.gameState as Record<string, unknown> | undefined;
+      if (activeGameState) {
+        activeGameState.disconnectGraceExpiresAt = null;
+        activeGameState.disconnectedPlayerId = null;
+        room.touch();
+      }
     }
 
     this.reconnectManager.registerToken(freshReconnectToken, room.id, playerId);

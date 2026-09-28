@@ -217,4 +217,60 @@ export class TicTacToeAdapter
 
     return { nextState: state };
   }
+
+  public handlePlayerDisconnect(
+    state: TicTacToeGameState,
+    playerId: string,
+    graceExpiresAt: number
+  ): TicTacToeGameState {
+    if (state.status !== "in_progress") {
+      return state;
+    }
+    return {
+      ...state,
+      disconnectGraceExpiresAt: graceExpiresAt,
+      disconnectedPlayerId: playerId,
+    };
+  }
+
+  public handlePlayerReconnect(
+    state: TicTacToeGameState,
+    _playerId: string
+  ): TicTacToeGameState {
+    return {
+      ...state,
+      disconnectGraceExpiresAt: null,
+      disconnectedPlayerId: null,
+    };
+  }
+
+  public handleForfeit(
+    state: TicTacToeGameState,
+    _forfeitedPlayerId: string,
+    remainingPlayerIds: string[]
+  ): { nextState: TicTacToeGameState; isCompleted: boolean } {
+    if (state.status !== "in_progress") {
+      return {
+        nextState: state,
+        isCompleted: state.status === "won" || state.status === "draw",
+      };
+    }
+
+    const remainingPlayerId = remainingPlayerIds[0];
+    const winnerMark = remainingPlayerId ? state.playerMarks[remainingPlayerId] ?? null : null;
+
+    const nextState: TicTacToeGameState = {
+      ...state,
+      status: "won",
+      winner: winnerMark,
+      resultReason: "disconnect_forfeit",
+      disconnectGraceExpiresAt: null,
+      disconnectedPlayerId: null,
+    };
+
+    return {
+      nextState,
+      isCompleted: true,
+    };
+  }
 }

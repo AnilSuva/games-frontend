@@ -140,6 +140,58 @@ export interface ITransport {
   - **Resilient Reconnection**: 30-second disconnect grace period with cryptographically secure reconnect tokens.
   - **Security & Limits**: Strict Origin allowlist, Token Bucket rate limiting, 32KB payload cap, and zero trust for client claims.
 
+### 7.1 Reusable Multiplayer Structure
+
+The multiplayer architecture strictly separates generic networking and room lifecycle management from game-specific state rules across both frontend and backend.
+
+```
++-----------------------------------------------------------------------------------+
+| FRONTEND REUSABLE LAYER                                                           |
+|  - storage.ts              Session token, room persistence, error formatting      |
+|  - useMultiplayerRoom()    WebSocket lifecycle, heartbeat, reconnect backoff,     |
+|                            room create/join/leave, timeout handling               |
+|  - OnlineMatchLobby        Generic lobby UI (Create / Join / Waiting / Code)      |
++-----------------------------------------------------------------------------------+
+                                         |
+                                         v
++-----------------------------------------------------------------------------------+
+| GAME-SPECIFIC FRONTEND CARTRIDGE (e.g., Tic-Tac-Toe, Connect Four)               |
+|  - useOnline<Game>()       Thin wrapper (~200 LOC) over useMultiplayerRoom        |
+|  - <Game>Game.tsx          Mounts OnlineMatchLobby or active board renderer       |
++-----------------------------------------------------------------------------------+
+                                         |  WebSocket /ws
+                                         v
++-----------------------------------------------------------------------------------+
+| BACKEND TRANSPORT & LIFECYCLE (Game-Agnostic)                                     |
+|  - WebSocket Layer         Transport only, message routing, heartbeats           |
+|  - RoomManager             Room lifecycle, code indexing, disconnect timers       |
+|  - Session / Auth          Player identity, session store, reconnect tokens       |
+|  - Validation / Security   Zod runtime schemas, origin allowlist, rate limiting   |
++-----------------------------------------------------------------------------------+
+                                         |
+                                         v
++-----------------------------------------------------------------------------------+
+| BACKEND GAME ADAPTERS (Pluggable)                                                 |
+|  - GameAdapter Interface   createInitialState, validateAction, applyAction,       |
+|                            handlePlayerDisconnect, handlePlayerReconnect,         |
+|                            handleForfeit                                          |
+|  - TicTacToeAdapter        Tic-Tac-Toe moves, win/draw check, rematch rotation    |
+|  - ConnectFourAdapter      (Future) Connect Four column drops, 4-in-a-row rules   |
++-----------------------------------------------------------------------------------+
+```
+
+### 7.2 How Future Games (e.g. Connect Four) Plug Into Multiplayer
+
+Adding online multiplayer to a new game requires zero changes to the underlying networking, room manager, or lobby infrastructure:
+
+1. **Frontend**:
+   - **Lobby UI**: Reuse `<OnlineMatchLobby gameTitle="Connect Four" ... />` inside the game's cartridge component.
+   - **Game Hook**: Create `useOnlineConnectFour()` delegating to `useMultiplayerRoom({ gameId: "connect-four" })`. It handles the game state reducer, column drop action dispatch (`sendMove`), and rematch requests.
+2. **Backend**:
+   - **Game Adapter**: Implement `ConnectFourAdapter` conforming to `GameAdapter<ConnectFourGameState, ConnectFourAction>`. Implement `createInitialState`, `validateAction`, `applyAction`, and optional lifecycle hooks (`handlePlayerDisconnect`, `handlePlayerReconnect`, `handleForfeit`).
+   - **Registration**: Register the adapter in `createDefaultGameRegistry()` (`apps/server/src/games/index.ts`).
+   - The WebSocket protocol, room manager, reconnect grace countdown, and session persistence work automatically.
+
 ---
 
 ## 8. Mobile-First Input Strategy
