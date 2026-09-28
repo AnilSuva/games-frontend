@@ -41,36 +41,31 @@ A quiet, beautifully crafted collection of browser games. Board classics and arc
 
 ## 📁 Project Structure
 
-```
-src/
-├── app/                          # Next.js App Router pages
-│   ├── page.tsx                  # Home / game catalog
-│   └── games/[gameId]/           # Dynamic game pages
+```text
+omniPlay/
+├── apps/
+│   ├── web/                          # Next.js OmniPlay web application
+│   │   ├── src/
+│   │   │   ├── app/                  # Next.js App Router pages
+│   │   │   ├── components/           # Catalog, host, shared game UI, shell
+│   │   │   ├── games/                # Board & arcade game implementations
+│   │   │   └── platform/             # Registry, audio, storage
+│   │   ├── public/                   # Static assets & audio files
+│   │   ├── tests/                    # Unit & integration test suites
+│   │   ├── package.json
+│   │   ├── next.config.ts
+│   │   └── tsconfig.json
+│   │
+│   └── server/                       # Placeholder for multiplayer backend (Render)
+│       └── README.md
 │
-├── components/
-│   ├── catalog/                  # Dashboard, game cards, grid
-│   ├── game-host/                # GameContainer, GameHUD, GameHost, PauseModal
-│   ├── game-ui/                  # Shared: DifficultySlider, GameModeSelector, GameResultPopup
-│   └── shell/                    # Header, Footer
-│
-├── games/
-│   ├── common/                   # Shared game types & interfaces
-│   ├── board/
-│   │   └── tic-tac-toe/
-│   │       ├── bot/              # AI: minimax, difficulty tiers, async service
-│   │       ├── logic/            # Pure reducer, rules, types (zero React deps)
-│   │       ├── components/       # TicTacToeGame, Cell, WinningStrike
-│   │       └── preview/          # Catalog preview card
-│   └── arcade/
-│       └── brick-blast/          # Placeholder preview
-│
-├── platform/
-│   ├── registry/                 # Game manifests, cartridge map, types
-│   ├── audio/                    # Audio service types (future)
-│   └── storage/                  # Storage service types (future)
-│
-tests/
-└── tic-tac-toe.test.mjs          # 24 unit tests (reducer, rules, bot, difficulty)
+├── docs/                             # Architecture & platform documentation
+├── AGENTS.md
+├── CLAUDE.md
+├── README.md
+├── package.json                      # npm workspace root
+├── package-lock.json
+└── .gitignore
 ```
 
 ## 🏗 Architecture
