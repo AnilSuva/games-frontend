@@ -123,8 +123,10 @@ export default function BrickBlastGame({
     onScoreUpdate?.(0);
   }, [botDifficulty, onLifecycleChange, onScoreUpdate, selectedMode]);
 
-  // Keep the ref in sync with the latest handler on every render
-  handleRestartRef.current = handleRestart;
+  // Keep the ref in sync with the latest handler outside of render
+  useEffect(() => {
+    handleRestartRef.current = handleRestart;
+  });
 
   const handleSelectConfiguredMode = useCallback((modeId: string, value: string) => {
     if (modeId !== "bot") return;

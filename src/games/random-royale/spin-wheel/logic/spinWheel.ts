@@ -21,6 +21,8 @@ export {
   MIN_SPIN_TURNS,
   EXTRA_SPIN_TURNS,
   WHEEL_COLORS,
+  PEAK_SPEED_MULTIPLIER,
+  calculatePeakAngularVelocity,
 } from "../config";
 
 export type { Participant, SpinPlan, WheelSegment } from "../types";

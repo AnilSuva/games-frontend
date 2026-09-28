@@ -206,18 +206,19 @@ class SoundManager {
     this.activeSpinTickSources.clear();
   }
 
-  public playSpinTick(tickNumber: number): void {
+  public playSpinTick(tickNumber: number, timeOffsetSec = 0): void {
     if (!Number.isInteger(tickNumber) || tickNumber < 1 || tickNumber > SPIN_TICK_SOUND_NAMES.length) {
       return;
     }
 
     const name = SPIN_TICK_SOUND_NAMES[tickNumber - 1];
-    this.playDecodedSound(name, this.activeSpinTickSources);
+    this.playDecodedSound(name, this.activeSpinTickSources, timeOffsetSec);
   }
 
   private playDecodedSound(
     name: SoundEffectName,
-    activeSources?: Set<AudioBufferSourceNode>
+    activeSources?: Set<AudioBufferSourceNode>,
+    timeOffsetSec = 0
   ): boolean {
     const context = this.webAudioContext;
     const buffer = this.decodedAudioBuffers.get(name);
@@ -227,13 +228,14 @@ class SoundManager {
       const source = context.createBufferSource();
       const gain = context.createGain();
       source.buffer = buffer;
-      gain.gain.setValueAtTime(getSoundVolume(name), context.currentTime);
+      const startTime = context.currentTime + Math.max(0, timeOffsetSec);
+      gain.gain.setValueAtTime(getSoundVolume(name), startTime);
       source.connect(gain).connect(context.destination);
       if (activeSources) {
         activeSources.add(source);
         source.onended = () => activeSources.delete(source);
       }
-      source.start();
+      source.start(startTime);
       return true;
     } catch {
       return false;

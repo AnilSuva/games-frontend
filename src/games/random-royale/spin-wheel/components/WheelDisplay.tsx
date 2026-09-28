@@ -66,8 +66,15 @@ export function WheelDisplay({
     let nextTickNumber = 1;
     let animationCompleted = false;
 
+    let lastTime: number | null = null;
+
     const animate = (time: number) => {
       if (startTime === null) startTime = time;
+      const frameDeltaSec = lastTime !== null
+        ? Math.max(0.001, Math.min(0.05, (time - lastTime) / 1000))
+        : 0.016;
+      lastTime = time;
+
       const progress = Math.min(1, (time - startTime) / duration);
       const currentRotation = progress === 1
         ? rotation
@@ -80,7 +87,8 @@ export function WheelDisplay({
         participants.length
       );
       for (let crossing = 0; crossing < crossings; crossing += 1) {
-        soundManager.playSpinTick(nextTickNumber);
+        const timeOffsetSec = crossings > 1 ? (crossing / crossings) * frameDeltaSec : 0;
+        soundManager.playSpinTick(nextTickNumber, timeOffsetSec);
         nextTickNumber = nextSpinTickNumber(nextTickNumber);
       }
       previousRotation = currentRotation;
@@ -136,34 +144,34 @@ export function WheelDisplay({
             transform: "rotate(0deg)",
           }}
         >
-          {participants.length === 0 ? (
-            <g>
-              <circle cx="250" cy="250" r="240" fill="#eeece6" />
-              <circle
-                cx="250"
-                cy="250"
-                r="205"
-                fill="none"
-                stroke="#d2cecd"
-                strokeDasharray="4 8"
-              />
-              <text
-                x="250"
-                y="244"
-                textAnchor="middle"
-                className="fill-[#6b665f] text-[18px]"
-              >
-                Add names
-              </text>
-              <text
-                x="250"
-                y="270"
-                textAnchor="middle"
-                className="fill-[#9c978e] text-[12px]"
-              >
-                to build your wheel
-              </text>
-            </g>
+{participants.length === 0 ? (
+                <g>
+                  <circle cx="250" cy="250" r="240" fill="#eeece6" />
+                  <circle
+                    cx="250"
+                    cy="250"
+                    r="205"
+                    fill="none"
+                    stroke="#d2cecd"
+                    strokeDasharray="4 8"
+                  />
+                  <text
+                    x="250"
+                    y="300"
+                    textAnchor="middle"
+                    className="fill-[#6b665f] text-[18px]"
+                  >
+                    Add names
+                  </text>
+                  <text
+                    x="250"
+                    y="325"
+                    textAnchor="middle"
+                    className="fill-[#9c978e] text-[12px]"
+                  >
+                    to build your wheel
+                  </text>
+                </g>
           ) : participants.length === 1 ? (
             <g>
               <circle cx="250" cy="250" r="240" fill={WHEEL_COLORS[0]} />

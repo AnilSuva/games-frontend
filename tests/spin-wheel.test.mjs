@@ -209,3 +209,64 @@ test("winner selection pure module selects winner correctly", async () => {
   assert.equal(selectRandomWinner([], () => 0), null);
 });
 
+test("peak angular velocity scales by 3x while preserving duration and motion curve", async () => {
+  const {
+    PEAK_SPEED_MULTIPLIER,
+    MIN_SPIN_TURNS,
+    EXTRA_SPIN_TURNS,
+    calculatePeakAngularVelocity,
+  } = await import("../src/games/random-royale/spin-wheel/config.ts");
+
+  assert.equal(PEAK_SPEED_MULTIPLIER, 3);
+  assert.equal(MIN_SPIN_TURNS, 15);
+  assert.equal(EXTRA_SPIN_TURNS, 9);
+
+  // Previous average (6 turns): ~347 deg/s
+  const previousAvgSpeed = calculatePeakAngularVelocity(6, 12000);
+  assert.ok(previousAvgSpeed > 340 && previousAvgSpeed < 355);
+
+  // New average (18 turns): ~1041 deg/s (exactly 3x previous average)
+  const newAvgSpeed = calculatePeakAngularVelocity(18, 12000);
+  assert.ok(newAvgSpeed > 1030 && newAvgSpeed < 1050);
+
+  const ratio = newAvgSpeed / previousAvgSpeed;
+  assert.ok(Math.abs(ratio - 3.0) < 0.01, `Expected ratio ~3.0, got ${ratio}`);
+});
+
+test("high-speed multi-boundary crossings are accurately counted without missing or duplicates", async () => {
+  const { countSegmentBoundaryCrossings, nextSpinTickNumber } = await import(
+    "../src/games/random-royale/spin-wheel/logic/boundaryCrossings.ts"
+  );
+
+  // At ~1040 deg/s with 60 FPS (~16.6ms), wheel rotates ~17.3 deg per frame
+  // With 200 participants (1.8 deg per segment): ~9 to 10 crossings in a single frame
+  const crossings = countSegmentBoundaryCrossings(0, 17.3, 200);
+  assert.equal(crossings, 9);
+
+  // Simulating consecutive high-speed frames: total crossings must equal overall angle / segment angle
+  let totalCrossings = 0;
+  let prevAngle = 0;
+  let tick = 1;
+  const tickSequence = [];
+
+  for (let frame = 1; frame <= 10; frame += 1) {
+    const currAngle = frame * 17.3;
+    const frameCrossings = countSegmentBoundaryCrossings(prevAngle, currAngle, 200);
+    totalCrossings += frameCrossings;
+    for (let c = 0; c < frameCrossings; c += 1) {
+      tickSequence.push(tick);
+      tick = nextSpinTickNumber(tick);
+    }
+    prevAngle = currAngle;
+  }
+
+  // 173 degrees / 1.8 degrees = 96.11 => exactly 96 boundaries crossed across all 10 frames
+  assert.equal(totalCrossings, 96);
+  assert.equal(tickSequence.length, 96);
+  // Verify strict sequence cycling 1..7
+  for (let i = 0; i < tickSequence.length; i += 1) {
+    assert.equal(tickSequence[i], (i % 7) + 1);
+  }
+});
+
+
