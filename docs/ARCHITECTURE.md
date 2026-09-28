@@ -41,42 +41,32 @@ The platform uses a **Plugin/Cartridge Pattern** separating the host platform fr
 ## 2. Directory Structure
 
 ```text
-games/
-├── public/
-│   ├── manifest.json                  # PWA Manifest
-│   ├── icons/                         # PWA Icons
-│   └── assets/
-│       ├── platform/                  # Shared sounds & UI icons
-│       └── games/                     # Per-game assets
-├── src/
-│   ├── app/                           # Next.js App Router
-│   │   ├── layout.tsx                 # Root layout & viewport meta
-│   │   ├── page.tsx                   # Game catalog
-│   │   └── games/[gameId]/page.tsx    # Universal Game Host view
-│   ├── platform/                      # Platform core
-│   │   ├── registry/                  # Central game registry
-│   │   ├── audio/                     # Web Audio API manager
-│   │   ├── storage/                   # Storage abstraction (Local / IndexedDB)
-│   │   ├── transport/                 # ITransport & LocalTransport
-│   │   ├── viewport/                  # Mobile viewport helpers
-│   │   └── workers/                   # Web Worker pool manager
-│   ├── components/                    # Platform UI
-│   │   ├── host/                      # GameContainer, GameHUD, PauseModal
-│   │   └── input/                     # Virtual Joystick & Touch Controls
-│   ├── games/                         # Self-contained game cartridges
-│   │   ├── common/                    # Shared contracts (types, manifests)
-│   │   ├── board/                     # React/SVG turn-based games
-│   │   │   ├── tic-tac-toe/
-│   │   │   ├── chess/
-│   │   │   ├── checkers/
-│   │   │   └── connect-four/
-│   │   └── arcade/                    # Phaser continuous-loop games
-│   │       ├── brick-blast/
-│   │       ├── archery/
-│   │       ├── platformer/
-│   │       └── endless-runner/
-│   └── styles/
-│       └── globals.css                # CSS resets & touch utilities
+omniPlay/
+├── apps/
+│   ├── web/                           # Next.js Frontend (Vercel)
+│   │   ├── public/                    # Audio files, icons, static assets
+│   │   ├── src/
+│   │   │   ├── app/                   # Next.js App Router
+│   │   │   ├── platform/              # Audio, storage, registry
+│   │   │   ├── components/            # UI components (catalog, host, shell)
+│   │   │   └── games/                 # Game cartridges (board, arcade)
+│   │   └── tests/                     # Frontend unit tests
+│   │
+│   └── server/                        # Multiplayer Realtime Server (Render)
+│       ├── src/
+│       │   ├── http/                  # Health check & HTTP routes
+│       │   ├── websocket/             # Fastify WebSocket gateway & protocol
+│       │   ├── rooms/                 # RoomManager, Room model, reconnect logic
+│       │   ├── auth/                  # Cryptographic identity & session management
+│       │   ├── security/              # Origin verification & Token Bucket rate limiting
+│       │   ├── validation/            # Zod runtime message schemas
+│       │   └── games/                 # GameAdapter pluggable abstraction
+│       └── tests/                     # Backend unit & integration tests
+│
+├── docs/                              # Architecture documentation
+├── AGENTS.md
+├── package.json                       # npm workspace root
+└── package-lock.json
 ```
 
 ---
@@ -132,7 +122,7 @@ Every board game uses a functional reducer:
 
 ---
 
-## 7. Transport-Agnostic Networking
+## 7. Transport-Agnostic Networking & Realtime Backend
 
 Game actions pass through `ITransport`:
 ```typescript
@@ -142,8 +132,13 @@ export interface ITransport {
   disconnect(): void;
 }
 ```
-- Local 2-Player uses `LocalTransport` (direct in-memory dispatch).
-- Online multiplayer (future) implements `WebSocketTransport` with identical semantics.
+- **Local 2-Player**: uses `LocalTransport` (direct in-memory dispatch).
+- **Online Multiplayer (apps/server)**: uses `WebSocketTransport` connecting to `/ws`:
+  - **Authoritative Backend**: Game actions are validated server-side by `GameAdapter` before state transitions.
+  - **Envelope Protocol**: Versioned JSON envelopes (`version: 1`, `type`, `requestId`, `payload`).
+  - **Room Infrastructure**: Human-friendly 6-character room codes (`ABC234`), 2-player capacity initially, monotonic version increments.
+  - **Resilient Reconnection**: 30-second disconnect grace period with cryptographically secure reconnect tokens.
+  - **Security & Limits**: Strict Origin allowlist, Token Bucket rate limiting, 32KB payload cap, and zero trust for client claims.
 
 ---
 

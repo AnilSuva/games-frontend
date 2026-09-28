@@ -6,11 +6,19 @@
     "apps/*"
   ],
   "scripts": {
+    "dev:web": "npm run dev -w web",
+    "dev:server": "npm run dev -w server",
     "dev": "npm run dev -w web",
-    "build": "npm run build -w web",
-    "start": "npm run start -w web",
+    "build:web": "npm run build -w web",
+    "build:server": "npm run build -w server",
+    "build": "npm run build --workspaces --if-present",
+    "lint:web": "npm run lint -w web",
     "lint": "npm run lint -w web",
-    "test": "npm run test -w web",
-    "typecheck": "npm run typecheck -w web"
+    "test:web": "npm run test -w web",
+    "test:server": "npm run test -w server",
+    "test": "npm test --workspaces --if-present",
+    "typecheck:web": "npm run typecheck -w web",
+    "typecheck:server": "npm run typecheck -w server",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
