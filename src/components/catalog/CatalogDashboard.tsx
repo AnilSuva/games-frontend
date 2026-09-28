@@ -60,11 +60,14 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
       {/* Filter and Search Controls */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         {/* Category Pills */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Game categories">
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "all"}
+            aria-controls="game-panel"
             onClick={() => handleSelectTab("all")}
-            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${
               activeTab === "all"
                 ? "bg-[#1c1917] text-white shadow-sm"
                 : "bg-white border border-[#e6e3dc] text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:border-[#d2cecd] active:bg-[#f0eee9]"
@@ -74,8 +77,11 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "board"}
+            aria-controls="game-panel"
             onClick={() => handleSelectTab("board")}
-            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${
               activeTab === "board"
                 ? "bg-[#1c1917] text-white shadow-sm"
                 : "bg-white border border-[#e6e3dc] text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:border-[#d2cecd] active:bg-[#f0eee9]"
@@ -85,8 +91,11 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "arcade"}
+            aria-controls="game-panel"
             onClick={() => handleSelectTab("arcade")}
-            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${
               activeTab === "arcade"
                 ? "bg-[#1c1917] text-white shadow-sm"
                 : "bg-white border border-[#e6e3dc] text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:border-[#d2cecd] active:bg-[#f0eee9]"
@@ -96,8 +105,11 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "random-royale"}
+            aria-controls="game-panel"
             onClick={() => handleSelectTab("random-royale")}
-            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+            className={`px-3.5 py-2 sm:py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${
               activeTab === "random-royale"
                 ? "bg-[#1c1917] text-white shadow-sm"
                 : "bg-white border border-[#e6e3dc] text-[#6b665f] sm:hover:text-[#1c1917] sm:hover:border-[#d2cecd] active:bg-[#f0eee9]"
@@ -109,11 +121,16 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
 
         {/* Quiet Search Box */}
         <div className="relative sm:w-64">
+          <label htmlFor="game-search" className="sr-only">
+            Search games
+          </label>
           <input
+            id="game-search"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search..."
+            aria-label="Search games"
             className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg bg-white border border-[#e6e3dc] text-[#1c1917] placeholder-[#9c978e] focus:outline-none focus:border-[#1c1917] transition"
           />
           <svg
@@ -128,7 +145,7 @@ export function CatalogDashboard({ games }: CatalogDashboardProps) {
           {searchQuery && (
             <button
               onClick={handleClearSearch}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#9c978e] hover:text-[#1c1917]"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#9c978e] hover:text-[#1c1917] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] rounded"
               aria-label="Clear search"
             >
               ×
