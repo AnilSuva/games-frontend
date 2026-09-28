@@ -64,6 +64,13 @@ export class TicTacToeAdapter
         };
       }
 
+      if (state.disconnectGraceExpiresAt && state.disconnectGraceExpiresAt > Date.now()) {
+        return {
+          valid: false,
+          error: "Match is paused while waiting for opponent to reconnect",
+        };
+      }
+
       const playerMark = state.playerMarks[playerId];
       if (!playerMark) {
         return {
@@ -132,6 +139,7 @@ export class TicTacToeAdapter
           winner: playerMark,
           winningLine,
           moveCount,
+          resultReason: "win",
         };
         return {
           nextState,
@@ -151,6 +159,7 @@ export class TicTacToeAdapter
           winner: null,
           winningLine: null,
           moveCount,
+          resultReason: "draw",
         };
         return {
           nextState,

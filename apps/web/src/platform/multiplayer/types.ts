@@ -41,6 +41,8 @@ export interface WinningLine {
   direction: "horizontal" | "vertical" | "diagonal";
 }
 
+export type ResultReason = "win" | "draw" | "disconnect_forfeit";
+
 export interface OnlineTicTacToeState {
   board: (PlayerMark | null)[];
   currentPlayer: PlayerMark;
@@ -51,6 +53,9 @@ export interface OnlineTicTacToeState {
   moveCount: number;
   playerMarks: Record<string, PlayerMark>;
   rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
 }
 
 export interface ServerEnvelope<T = unknown> {

@@ -11,6 +11,8 @@ export interface WinningLine {
 
 export type TicTacToeStatus = "waiting" | "in_progress" | "won" | "draw";
 
+export type ResultReason = "win" | "draw" | "disconnect_forfeit";
+
 export interface TicTacToeGameState {
   board: CellValue[];
   currentPlayer: PlayerMark;
@@ -21,6 +23,9 @@ export interface TicTacToeGameState {
   moveCount: number;
   playerMarks: Record<string, PlayerMark>; // playerId -> "X" | "O"
   rematchRequests: string[]; // playerIds who requested rematch
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
 }
 
 export type TicTacToeAction =

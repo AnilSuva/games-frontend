@@ -286,7 +286,10 @@ export default function TicTacToeGame({
       onGameOver({
         winner: online.winnerMark,
         score,
-        details: { mode: "online" },
+        details: {
+          mode: "online",
+          resultReason: online.resultReason ?? "win",
+        },
       });
     } else if (status === "draw") {
       // Draw: no result sound
@@ -310,6 +313,7 @@ export default function TicTacToeGame({
     onScoreUpdate,
     onLifecycleChange,
     online.gameState,
+    online.resultReason,
   ]);
 
   // Bot Turn Automation
@@ -394,10 +398,16 @@ export default function TicTacToeGame({
       ? new Set(online.gameState.winningLine.line)
       : null;
 
+    const isDisconnectForfeit = online.resultReason === "disconnect_forfeit";
+
     const onlineResultMessage =
       online.gameState?.status === "won"
         ? online.isWinner
-          ? "You won!"
+          ? isDisconnectForfeit
+            ? "Opponent forfeit (disconnected)"
+            : "You won!"
+          : isDisconnectForfeit
+          ? "You forfeit (disconnected)"
           : "Opponent won"
         : "Draw";
 
@@ -434,7 +444,7 @@ export default function TicTacToeGame({
           <div className="flex items-center gap-2">
             {!online.isOpponentConnected ? (
               <span className="text-[11px] text-[#e0530a] font-medium animate-pulse">
-                Opponent reconnecting...
+                Opponent disconnected
               </span>
             ) : online.gameState?.status === "in_progress" ? (
               <span
@@ -449,6 +459,25 @@ export default function TicTacToeGame({
             ) : null}
           </div>
         </div>
+
+        {/* Opponent Disconnected 30-Second Forfeit Countdown Banner */}
+        {online.disconnectGraceSecondsRemaining !== null && !isOnlineGameOver && (
+          <div className="w-full max-w-[340px] sm:max-w-[380px] px-3 py-2 bg-[#fff7ed] border border-[#fed7aa] rounded-xl flex items-center justify-between text-xs text-[#c2410c] shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ea580c] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ea580c]" />
+              </span>
+              <div className="flex flex-col text-left">
+                <span className="font-semibold text-[#9a3412]">Opponent disconnected</span>
+                <span className="text-[11px] text-[#c2410c]">Waiting for reconnect...</span>
+              </div>
+            </div>
+            <div className="font-mono text-xs font-bold tracking-wider text-[#ea580c] bg-white px-2 py-1 rounded-lg border border-[#fed7aa] shadow-2xs">
+              00:{String(online.disconnectGraceSecondsRemaining).padStart(2, "0")}
+            </div>
+          </div>
+        )}
 
         {/* 3x3 Board with SVG Winning Line Strike-Through */}
         <div className="active-board-square relative aspect-square">
@@ -468,10 +497,11 @@ export default function TicTacToeGame({
                   online.gameState?.status !== "in_progress" ||
                   !online.isMyTurn ||
                   !online.isOpponentConnected ||
+                  online.isMatchPaused ||
                   cellValue !== null
                 }
                 onClick={(i) => {
-                  if (online.isMyTurn && online.gameState?.board[i] === null) {
+                  if (online.isMyTurn && !online.isMatchPaused && online.gameState?.board[i] === null) {
                     soundManager.play("buttonClick");
                     online.sendMove(i);
                   }

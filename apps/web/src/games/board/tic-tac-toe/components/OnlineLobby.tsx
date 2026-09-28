@@ -55,8 +55,8 @@ export function OnlineLobby({
   // If host is waiting for opponent inside a created room
   if (isWaiting && room) {
     return (
-      <div className="flex flex-col items-center justify-center w-full max-w-[360px] p-6 bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm text-center">
-        <div className="w-10 h-10 rounded-xl bg-white border border-[#e6e3dc] flex items-center justify-center text-[#e0530a] mb-3 text-lg">
+      <div className="flex flex-col items-center justify-center w-full max-w-[320px] sm:max-w-[340px] px-5 py-6 sm:px-6 sm:py-7 mx-auto my-auto bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm text-center">
+        <div className="w-10 h-10 rounded-xl bg-white border border-[#e6e3dc] flex items-center justify-center text-[#e0530a] mt-2 mb-3 text-lg shadow-2xs">
           🎮
         </div>
         <h2 className="text-base font-semibold text-[#1c1917] mb-1">Room Created</h2>
@@ -65,24 +65,24 @@ export function OnlineLobby({
         </p>
 
         {/* Room Code Display */}
-        <div className="flex items-center justify-center gap-2 w-full p-3 bg-white rounded-xl border border-[#e6e3dc] mb-4">
+        <div className="flex items-center justify-center gap-2 w-full p-2.5 bg-white rounded-xl border border-[#e6e3dc] mb-4 shadow-2xs">
           <span className="font-mono text-2xl font-bold tracking-widest text-[#1c1917]">
             {room.roomCode}
           </span>
           <button
             type="button"
             onClick={handleCopyCode}
-            className="px-2.5 py-1 text-xs font-medium text-[#6b665f] bg-[#f7f5f0] hover:bg-[#ede9e1] border border-[#dedad2] rounded-md transition cursor-pointer"
+            className="px-2.5 py-1 text-xs font-medium text-[#6b665f] bg-[#f7f5f0] hover:bg-[#ede9e1] border border-[#dedad2] rounded-lg transition cursor-pointer"
           >
             {copied ? "Copied! ✓" : "Copy"}
           </button>
         </div>
 
         {/* Pulsing Waiting Indicator */}
-        <div className="flex items-center justify-center gap-2 text-xs font-medium text-[#6b665f] mb-6">
-          <span className="relative flex h-2.5 w-2.5">
+        <div className="flex items-center justify-center gap-2 text-xs font-medium text-[#6b665f] mb-5">
+          <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e0530a] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#e0530a]" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#e0530a]" />
           </span>
           <span>Waiting for opponent to join...</span>
         </div>
@@ -94,7 +94,7 @@ export function OnlineLobby({
             soundManager.play("buttonClick");
             onLeaveRoom();
           }}
-          className="text-xs text-[#6b665f] hover:text-[#1c1917] underline underline-offset-4 cursor-pointer"
+          className="text-xs text-[#6b665f] hover:text-[#1c1917] underline underline-offset-4 cursor-pointer transition"
         >
           Cancel Room
         </button>
@@ -105,13 +105,16 @@ export function OnlineLobby({
   // Join Room Form Tab
   if (tab === "join") {
     return (
-      <div className="flex flex-col items-center justify-center w-full max-w-[360px] p-6 bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm">
+      <div className="flex flex-col items-center justify-center w-full max-w-[320px] sm:max-w-[340px] px-5 py-6 sm:px-6 sm:py-7 mx-auto my-auto bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm">
+        <div className="w-10 h-10 rounded-xl bg-white border border-[#e6e3dc] flex items-center justify-center text-[#1c1917] mt-2 mb-3 text-lg shadow-2xs">
+          🔑
+        </div>
         <h2 className="text-base font-semibold text-[#1c1917] mb-1">Join Match</h2>
-        <p className="text-xs text-[#6b665f] mb-5 text-center">
-          Enter the 6-character room code from your opponent:
+        <p className="text-xs text-[#6b665f] mb-4 text-center">
+          Enter the 6-character room code:
         </p>
 
-        <form onSubmit={handleJoinSubmit} className="w-full flex flex-col gap-3">
+        <form onSubmit={handleJoinSubmit} className="w-full flex flex-col gap-2.5">
           <input
             type="text"
             value={roomCodeInput}
@@ -120,11 +123,11 @@ export function OnlineLobby({
             maxLength={10}
             autoFocus
             disabled={isJoining}
-            className="w-full px-4 py-3 text-center font-mono text-xl font-bold tracking-widest text-[#1c1917] bg-white border border-[#e6e3dc] rounded-xl focus:outline-none focus:border-[#1c1917] transition placeholder:text-[#9c978e] placeholder:tracking-normal placeholder:font-normal placeholder:text-sm disabled:bg-[#f7f5f0] disabled:text-[#9c978e]"
+            className="w-full px-3 py-2.5 text-center font-mono text-lg font-bold tracking-widest text-[#1c1917] bg-white border border-[#e6e3dc] rounded-xl focus:outline-none focus:border-[#1c1917] transition placeholder:text-[#9c978e] placeholder:tracking-normal placeholder:font-normal placeholder:text-xs disabled:bg-[#f7f5f0] disabled:text-[#9c978e]"
           />
 
           {errorMessage && (
-            <div className="w-full p-2.5 text-xs font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] rounded-lg text-center">
+            <div className="w-full p-2 text-xs font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] rounded-lg text-center">
               {errorMessage}
             </div>
           )}
@@ -132,7 +135,7 @@ export function OnlineLobby({
           <button
             type="submit"
             disabled={roomCodeInput.trim().length < 3 || isJoining || isConnecting}
-            className="w-full py-2.5 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2 min-h-[38px]"
           >
             {isConnecting ? (
               <>
@@ -157,7 +160,7 @@ export function OnlineLobby({
             setTab("choose");
           }}
           disabled={isJoining}
-          className="mt-4 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer"
+          className="mt-3.5 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer transition"
         >
           ← Back
         </button>
@@ -167,8 +170,8 @@ export function OnlineLobby({
 
   // Choose Action Tab (Create Room or Join Room)
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-[360px] p-6 bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm">
-      <div className="w-10 h-10 rounded-xl bg-white border border-[#e6e3dc] flex items-center justify-center text-[#1c1917] mb-2 text-lg">
+    <div className="flex flex-col items-center justify-center w-full max-w-[320px] sm:max-w-[340px] px-5 py-6 sm:px-6 sm:py-7 mx-auto my-auto bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-white border border-[#e6e3dc] flex items-center justify-center text-[#1c1917] mt-2 mb-3 text-lg shadow-2xs">
         🌐
       </div>
       <h2 className="text-base font-semibold text-[#1c1917] mb-1">Online Match</h2>
@@ -177,12 +180,12 @@ export function OnlineLobby({
       </p>
 
       {errorMessage && (
-        <div className="w-full p-2.5 mb-4 text-xs font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] rounded-lg text-center">
+        <div className="w-full p-2 mb-3.5 text-xs font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] rounded-lg text-center">
           {errorMessage}
         </div>
       )}
 
-      <div className="w-full flex flex-col gap-2.5">
+      <div className="w-full flex flex-col gap-2">
         <button
           type="button"
           onClick={() => {
@@ -190,7 +193,7 @@ export function OnlineLobby({
             onCreateRoom();
           }}
           disabled={isConnecting || isCreating}
-          className="w-full py-3 px-4 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+          className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-[#1c1917] hover:bg-[#2d2825] disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-2 min-h-[38px]"
         >
           {isConnecting ? (
             <>
@@ -214,7 +217,7 @@ export function OnlineLobby({
             setTab("join");
           }}
           disabled={isConnecting || isCreating}
-          className="w-full py-3 px-4 text-xs font-semibold text-[#1c1917] bg-white hover:bg-[#f7f5f0] disabled:bg-[#f7f5f0] disabled:text-[#9c978e] disabled:cursor-not-allowed border border-[#e6e3dc] rounded-xl transition shadow-xs cursor-pointer"
+          className="w-full py-2.5 px-4 text-xs font-semibold text-[#1c1917] bg-white hover:bg-[#f7f5f0] disabled:bg-[#f7f5f0] disabled:text-[#9c978e] disabled:cursor-not-allowed border border-[#e6e3dc] rounded-xl transition shadow-xs cursor-pointer min-h-[38px]"
         >
           Join Room
         </button>
@@ -227,7 +230,7 @@ export function OnlineLobby({
           onReturnToModes();
         }}
         disabled={isCreating}
-        className="mt-5 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer"
+        className="mt-4 text-xs text-[#6b665f] hover:text-[#1c1917] disabled:text-[#9c978e] underline underline-offset-4 cursor-pointer transition"
       >
         ← Back to Modes
       </button>

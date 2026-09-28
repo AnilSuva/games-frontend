@@ -512,16 +512,45 @@ export function useOnlineTicTacToe() {
     [connectionState, connect, sendMessage, startRoomTimeout]
   );
 
+  // Local clock tick when disconnect grace countdown is active
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!gameState?.disconnectGraceExpiresAt || gameState.status !== "in_progress") {
+      return;
+    }
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+    return () => clearInterval(interval);
+  }, [gameState?.disconnectGraceExpiresAt, gameState?.status]);
+
+  const disconnectGraceExpiresAt = gameState?.disconnectGraceExpiresAt ?? null;
+  const isMatchPaused = Boolean(
+    disconnectGraceExpiresAt &&
+      disconnectGraceExpiresAt > now &&
+      gameState?.status === "in_progress"
+  );
+
+  const disconnectGraceSecondsRemaining =
+    isMatchPaused && disconnectGraceExpiresAt
+      ? Math.max(0, Math.ceil((disconnectGraceExpiresAt - now) / 1000))
+      : null;
+
+  const resultReason =
+    gameState?.resultReason ??
+    (gameState?.status === "won" ? "win" : gameState?.status === "draw" ? "draw" : null);
+
   // Send move intent
   const sendMove = useCallback(
     (position: number) => {
-      if (!room) return;
+      if (!room || isMatchPaused) return;
       sendMessage("game.move", {
         roomId: room.roomId,
         position,
       });
     },
-    [room, sendMessage]
+    [room, isMatchPaused, sendMessage]
   );
 
   // Request rematch
@@ -572,8 +601,12 @@ export function useOnlineTicTacToe() {
       ? room.players.find((p) => p.playerId !== myPlayerId) ?? null
       : null;
 
+  const effectiveOpponentConnected =
+    isOpponentConnected && !isMatchPaused && (opponentPlayer?.connected ?? true);
+
   const isMyTurn = Boolean(
-    myMark &&
+    !isMatchPaused &&
+      myMark &&
       gameState &&
       gameState.status === "in_progress" &&
       gameState.currentPlayer === myMark
@@ -597,7 +630,10 @@ export function useOnlineTicTacToe() {
     myPlayerId,
     myMark,
     opponentPlayer,
-    isOpponentConnected,
+    isOpponentConnected: effectiveOpponentConnected,
+    isMatchPaused,
+    disconnectGraceSecondsRemaining,
+    resultReason,
     room,
     gameState,
     errorMessage,

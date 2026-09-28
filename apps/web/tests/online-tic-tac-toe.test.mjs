@@ -292,3 +292,48 @@ test("Match Entry Resilience: initializes fallback Tic-Tac-Toe state when two pl
   assert.equal(resolved.board.length, 9);
 });
 
+test("Disconnect Countdown & Match Pause Semantics", () => {
+  const futureExpiry = Date.now() + 27_400; // 27.4 seconds in future
+
+  function getGraceSecondsRemaining(disconnectGraceExpiresAt, currentTime) {
+    if (!disconnectGraceExpiresAt || disconnectGraceExpiresAt <= currentTime) return null;
+    return Math.max(0, Math.ceil((disconnectGraceExpiresAt - currentTime) / 1000));
+  }
+
+  // 27.4 seconds rounds to 28
+  assert.equal(getGraceSecondsRemaining(futureExpiry, Date.now()), 28);
+  // 1.1 seconds rounds to 2
+  assert.equal(getGraceSecondsRemaining(Date.now() + 1100, Date.now()), 2);
+  // 0.2 seconds rounds to 1
+  assert.equal(getGraceSecondsRemaining(Date.now() + 200, Date.now()), 1);
+  // Expired returns null
+  assert.equal(getGraceSecondsRemaining(Date.now() - 500, Date.now()), null);
+  // Null returns null
+  assert.equal(getGraceSecondsRemaining(null, Date.now()), null);
+});
+
+test("Result Reason & Message Semantics: Win, Draw, and Disconnect Forfeit", () => {
+  function getResultMessage(status, isWinner, resultReason) {
+    const isDisconnectForfeit = resultReason === "disconnect_forfeit";
+    if (status === "won") {
+      if (isWinner) {
+        return isDisconnectForfeit ? "Opponent forfeit (disconnected)" : "You won!";
+      }
+      return isDisconnectForfeit ? "You forfeit (disconnected)" : "Opponent won";
+    }
+    return "Draw";
+  }
+
+  // Normal win
+  assert.equal(getResultMessage("won", true, "win"), "You won!");
+  assert.equal(getResultMessage("won", false, "win"), "Opponent won");
+
+  // Disconnect forfeit win/loss
+  assert.equal(getResultMessage("won", true, "disconnect_forfeit"), "Opponent forfeit (disconnected)");
+  assert.equal(getResultMessage("won", false, "disconnect_forfeit"), "You forfeit (disconnected)");
+
+  // Normal draw
+  assert.equal(getResultMessage("draw", false, "draw"), "Draw");
+});
+
+

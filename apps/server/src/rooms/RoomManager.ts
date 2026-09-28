@@ -182,6 +182,14 @@ export class RoomManager {
 
     room.markPlayerDisconnected(playerId);
 
+    // If an active game is in progress, pause and record authoritative disconnect grace expiry
+    const activeGameState = room.gameState as Record<string, any> | undefined;
+    if (activeGameState && activeGameState.status === "in_progress") {
+      activeGameState.disconnectGraceExpiresAt = Date.now() + this.disconnectGracePeriodMs;
+      activeGameState.disconnectedPlayerId = playerId;
+      room.touch();
+    }
+
     this.reconnectManager.scheduleDisconnectCleanup(
       playerId,
       this.disconnectGracePeriodMs,
@@ -190,14 +198,31 @@ export class RoomManager {
         if (!currentRoom) return;
 
         const player = currentRoom.players.get(playerId);
-        // Only remove if still disconnected
+        // Only trigger forfeit and remove if still disconnected
         if (player && !player.connected) {
+          const currentGameState = currentRoom.gameState as Record<string, any> | undefined;
+          if (currentGameState && currentGameState.status === "in_progress") {
+            const remainingPlayer = Array.from(currentRoom.players.values()).find(
+              (p) => p.playerId !== playerId && p.connected
+            );
+            if (remainingPlayer && currentGameState.playerMarks) {
+              const winnerMark = currentGameState.playerMarks[remainingPlayer.playerId];
+              currentGameState.status = "won";
+              currentGameState.winner = winnerMark;
+              currentGameState.resultReason = "disconnect_forfeit";
+              currentGameState.disconnectGraceExpiresAt = null;
+              currentGameState.disconnectedPlayerId = null;
+              currentRoom.status = "completed";
+              currentRoom.touch();
+            }
+          }
+
           currentRoom.removePlayer(playerId);
           this.playerToRoomId.delete(playerId);
 
           if (currentRoom.isEmpty()) {
             this.removeRoom(currentRoom.id);
-          } else {
+          } else if (currentRoom.status !== "completed") {
             currentRoom.status = "abandoned";
             currentRoom.touch();
           }
@@ -248,6 +273,14 @@ export class RoomManager {
         code: "INVALID_SESSION",
         message: "Player was not found in room during reconnect",
       };
+    }
+
+    // Clear disconnect grace period on successful match reconnect
+    const activeGameState = room.gameState as Record<string, any> | undefined;
+    if (activeGameState) {
+      activeGameState.disconnectGraceExpiresAt = null;
+      activeGameState.disconnectedPlayerId = null;
+      room.touch();
     }
 
     this.reconnectManager.registerToken(freshReconnectToken, room.id, playerId);

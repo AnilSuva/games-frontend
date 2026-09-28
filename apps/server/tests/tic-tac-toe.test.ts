@@ -588,4 +588,127 @@ test("Tic-Tac-Toe Server Integration: Full match lifecycle, turns, anti-cheat, w
     wsOutsider.close();
     wsGuestLate.close();
   });
+
+  await t.test("Disconnect grace period: pause match, forbid moves, resume on reconnect, and forfeit on expiry", async () => {
+    // 1. Host creates room
+    const wsHost = await createWsClient(wsUrl);
+    sendJson(wsHost, {
+      version: 1,
+      type: "session.identify",
+      requestId: "forfeit_h_id",
+      payload: { displayName: "ForfeitHost" },
+    });
+    await waitForMessage(wsHost, (e) => e.type === "session.ready");
+
+    sendJson(wsHost, {
+      version: 1,
+      type: "room.create",
+      requestId: "forfeit_create",
+      payload: { gameId: "tic-tac-toe", maxPlayers: 2 },
+    });
+    const created = await waitForMessage<RoomCreatedPayload>(wsHost, (e) => e.type === "room.created");
+    const { roomCode, roomId } = created.payload.room;
+
+    // 2. Guest joins room
+    let wsGuest = await createWsClient(wsUrl);
+    sendJson(wsGuest, {
+      version: 1,
+      type: "session.identify",
+      requestId: "forfeit_g_id",
+      payload: { displayName: "ForfeitGuest" },
+    });
+    await waitForMessage(wsGuest, (e) => e.type === "session.ready");
+
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.join",
+      requestId: "forfeit_join",
+      payload: { roomCode },
+    });
+    const guestJoined = await waitForMessage<RoomJoinedPayload>(wsGuest, (e) => e.type === "room.joined");
+    let guestReconnectToken = guestJoined.payload.reconnectToken;
+    await waitForMessage(wsHost, (e) => e.type === "game.state");
+
+    // 3. Guest disconnects mid-game
+    wsGuest.close();
+
+    // Host receives room.updated (player_disconnected) and game.state with disconnectGraceExpiresAt
+    const [hostUpdated1, hostState1] = await Promise.all([
+      waitForMessage<RoomUpdatedPayload>(wsHost, (e) => e.type === "room.updated"),
+      waitForMessage<GameStatePayload>(wsHost, (e) => e.type === "game.state"),
+    ]);
+
+    assert.equal(hostUpdated1.payload.reason, "player_disconnected");
+    const h1State = hostState1.payload.gameState as TicTacToeGameState;
+    assert.ok(h1State.disconnectGraceExpiresAt);
+    assert.ok(h1State.disconnectGraceExpiresAt > Date.now());
+
+    // 4. Host attempts to move while match is paused -> must be rejected
+    sendJson(wsHost, {
+      version: 1,
+      type: "game.move",
+      requestId: "move_during_pause",
+      payload: { roomId, position: 0 },
+    });
+    const pauseErr = await waitForMessage<RoomErrorPayload>(wsHost, (e) => e.type === "room.error");
+    assert.equal(pauseErr.payload.code, "INVALID_MOVE");
+    assert.match(pauseErr.payload.message, /Match is paused/);
+
+    // 5. Guest reconnects within grace period -> match resumes and pause is cleared
+    wsGuest = await createWsClient(wsUrl);
+    sendJson(wsGuest, {
+      version: 1,
+      type: "room.reconnect",
+      requestId: "reconnect_within_grace",
+      payload: { roomCode, reconnectToken: guestReconnectToken },
+    });
+    const reconnectedPayload = await waitForMessage<RoomJoinedPayload>(wsGuest, (e) => e.type === "room.joined");
+    guestReconnectToken = reconnectedPayload.payload.reconnectToken;
+
+    const hostResumedState = await waitForMessage<GameStatePayload>(wsHost, (e) => e.type === "game.state");
+    const hResumed = hostResumedState.payload.gameState as TicTacToeGameState;
+    assert.equal(hResumed.disconnectGraceExpiresAt, null);
+    assert.equal(hResumed.status, "in_progress");
+
+    // Host can now move
+    sendJson(wsHost, {
+      version: 1,
+      type: "game.move",
+      requestId: "host_move_after_resume",
+      payload: { roomId, position: 4 },
+    });
+    const hostMovedState = await waitForMessage<GameStatePayload>(wsHost, (e) => e.type === "game.state");
+    const hMoved = hostMovedState.payload.gameState as TicTacToeGameState;
+    assert.equal(hMoved.board[4], "X");
+
+    // 6. Guest disconnects again, this time allowing grace period to expire
+    wsGuest.close();
+    await waitForMessage(wsHost, (e) => e.type === "room.updated");
+
+    // Wait for the 600ms grace period to expire on the server
+    const forfeitState = await waitForMessage<GameStatePayload>(
+      wsHost,
+      (e) => e.type === "game.state" && (e.payload.gameState as TicTacToeGameState).status === "won",
+      3000
+    );
+
+    const fState = forfeitState.payload.gameState as TicTacToeGameState;
+    assert.equal(fState.status, "won");
+    assert.equal(fState.winner, "X");
+    assert.equal(fState.resultReason, "disconnect_forfeit");
+
+    // 7. Disconnected guest cannot reconnect after forfeit
+    const wsLateGuest = await createWsClient(wsUrl);
+    sendJson(wsLateGuest, {
+      version: 1,
+      type: "room.reconnect",
+      requestId: "late_after_forfeit",
+      payload: { roomCode, reconnectToken: guestReconnectToken },
+    });
+    const lateErr = await waitForMessage<RoomErrorPayload>(wsLateGuest, (e) => e.type === "room.error");
+    assert.ok(lateErr.payload.code === "RECONNECT_EXPIRED" || lateErr.payload.code === "INVALID_SESSION");
+
+    wsHost.close();
+    wsLateGuest.close();
+  });
 });

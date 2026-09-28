@@ -6,7 +6,7 @@ import type { ServerConfig } from "../config/env.js";
 import type { InMemorySessionStore } from "../auth/session.js";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import { isOriginAllowed } from "../security/origin.js";
-import type { RoomUpdatedPayload } from "../types/index.js";
+import type { GameStatePayload, RoomUpdatedPayload } from "../types/index.js";
 import { parseClientMessage } from "../validation/messages.js";
 import { ConnectionTracker, PlayerConnection } from "./connection.js";
 import { HeartbeatService } from "./heartbeat.js";
@@ -47,7 +47,68 @@ export async function registerWebSocket(
     (_connectionId, playerId) => {
       fastify.log.info({ playerId }, "Cleaned up dead WebSocket connection");
       if (playerId) {
-        roomManager.handleDisconnect(playerId);
+        const disconnectResult = roomManager.handleDisconnect(playerId, (abandonedRoom) => {
+          broadcastToRoom<RoomUpdatedPayload>(
+            abandonedRoom,
+            {
+              version: PROTOCOL_VERSION,
+              type: "room.updated",
+              payload: {
+                room: abandonedRoom.toDto(),
+                reason: "player_left",
+              },
+            },
+            connectionTracker
+          );
+          if (abandonedRoom.gameState) {
+            broadcastToRoom<GameStatePayload>(
+              abandonedRoom,
+              {
+                version: PROTOCOL_VERSION,
+                type: "game.state",
+                payload: {
+                  roomId: abandonedRoom.id,
+                  version: abandonedRoom.version,
+                  gameState: abandonedRoom.gameState,
+                },
+              },
+              connectionTracker
+            );
+          }
+        });
+
+        if (disconnectResult.room) {
+          broadcastToRoom<RoomUpdatedPayload>(
+            disconnectResult.room,
+            {
+              version: PROTOCOL_VERSION,
+              type: "room.updated",
+              payload: {
+                room: disconnectResult.room.toDto(),
+                reason: "player_disconnected",
+              },
+            },
+            connectionTracker,
+            playerId
+          );
+
+          if (disconnectResult.room.gameState) {
+            broadcastToRoom<GameStatePayload>(
+              disconnectResult.room,
+              {
+                version: PROTOCOL_VERSION,
+                type: "game.state",
+                payload: {
+                  roomId: disconnectResult.room.id,
+                  version: disconnectResult.room.version,
+                  gameState: disconnectResult.room.gameState,
+                },
+              },
+              connectionTracker,
+              playerId
+            );
+          }
+        }
       }
     }
   );
@@ -170,6 +231,22 @@ export async function registerWebSocket(
                 },
                 connectionTracker
               );
+
+              if (abandonedRoom.gameState) {
+                broadcastToRoom<GameStatePayload>(
+                  abandonedRoom,
+                  {
+                    version: PROTOCOL_VERSION,
+                    type: "game.state",
+                    payload: {
+                      roomId: abandonedRoom.id,
+                      version: abandonedRoom.version,
+                      gameState: abandonedRoom.gameState,
+                    },
+                  },
+                  connectionTracker
+                );
+              }
             }
           );
 
@@ -187,6 +264,23 @@ export async function registerWebSocket(
               connectionTracker,
               playerConn.playerId
             );
+
+            if (disconnectResult.room.gameState) {
+              broadcastToRoom<GameStatePayload>(
+                disconnectResult.room,
+                {
+                  version: PROTOCOL_VERSION,
+                  type: "game.state",
+                  payload: {
+                    roomId: disconnectResult.room.id,
+                    version: disconnectResult.room.version,
+                    gameState: disconnectResult.room.gameState,
+                  },
+                },
+                connectionTracker,
+                playerConn.playerId
+              );
+            }
           }
         }
       });

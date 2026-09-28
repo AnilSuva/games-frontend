@@ -284,15 +284,19 @@ export async function handleClientMessage(
       );
 
       if (room.gameState) {
-        connection.send<GameStatePayload>({
-          version: PROTOCOL_VERSION,
-          type: "game.state",
-          payload: {
-            roomId: room.id,
-            version: room.version,
-            gameState: room.gameState,
+        broadcastToRoom<GameStatePayload>(
+          room,
+          {
+            version: PROTOCOL_VERSION,
+            type: "game.state",
+            payload: {
+              roomId: room.id,
+              version: room.version,
+              gameState: room.gameState,
+            },
           },
-        });
+          connectionTracker
+        );
       }
       break;
     }
@@ -343,7 +347,7 @@ export async function handleClientMessage(
         const errorCode: ErrorCode =
           validation.error === "It is not your turn"
             ? "NOT_YOUR_TURN"
-            : validation.error === "Invalid move position"
+            : validation.error === "Invalid move position" || validation.error?.includes("paused")
             ? "INVALID_MOVE"
             : validation.error === "Game is not in progress"
             ? "GAME_NOT_IN_PROGRESS"
