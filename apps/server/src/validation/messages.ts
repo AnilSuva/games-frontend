@@ -4,6 +4,8 @@ import type {
   ClientEnvelope,
   ClientPingPayload,
   ErrorCode,
+  GameMovePayload,
+  GameRematchPayload,
   RoomCreatePayload,
   RoomJoinPayload,
   RoomLeavePayload,
@@ -42,6 +44,15 @@ export const clientPingSchema = z.object({
   clientTime: z.number().optional(),
 });
 
+export const gameMoveSchema = z.object({
+  roomId: z.string().min(1).max(64),
+  position: z.number().int().min(0).max(8),
+});
+
+export const gameRematchSchema = z.object({
+  roomId: z.string().min(1).max(64),
+});
+
 const baseEnvelopeSchema = z.object({
   version: z.number().int(),
   type: z.enum([
@@ -51,6 +62,8 @@ const baseEnvelopeSchema = z.object({
     "room.leave",
     "room.reconnect",
     "ping",
+    "game.move",
+    "game.rematch",
   ]),
   requestId: z.string().min(1).max(64),
   payload: z.unknown().default({}),
@@ -62,7 +75,9 @@ export type ValidatedClientMessage =
   | (ClientEnvelope<RoomJoinPayload> & { type: "room.join" })
   | (ClientEnvelope<RoomLeavePayload> & { type: "room.leave" })
   | (ClientEnvelope<RoomReconnectPayload> & { type: "room.reconnect" })
-  | (ClientEnvelope<ClientPingPayload> & { type: "ping" });
+  | (ClientEnvelope<ClientPingPayload> & { type: "ping" })
+  | (ClientEnvelope<GameMovePayload> & { type: "game.move" })
+  | (ClientEnvelope<GameRematchPayload> & { type: "game.rematch" });
 
 export type ParseResult =
   | { success: true; message: ValidatedClientMessage }
@@ -269,6 +284,48 @@ export function parseClientMessage(
         message: {
           version: PROTOCOL_VERSION,
           type: "ping",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "game.move": {
+      const res = gameMoveSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid game.move payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: "game.move",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "game.rematch": {
+      const res = gameRematchSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid game.rematch payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: "game.rematch",
           requestId: envelope.requestId,
           payload: res.data,
         },

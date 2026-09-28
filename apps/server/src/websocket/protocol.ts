@@ -1,9 +1,12 @@
 import type { FastifyBaseLogger } from "fastify";
 import { PROTOCOL_VERSION } from "../config/constants.js";
 import type { InMemorySessionStore } from "../auth/session.js";
+import { createDefaultGameRegistry, type GameAdapterRegistry } from "../games/index.js";
 import type { Room } from "../rooms/Room.js";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import type {
+  ErrorCode,
+  GameStatePayload,
   RoomCreatedPayload,
   RoomJoinedPayload,
   RoomLeftPayload,
@@ -15,11 +18,14 @@ import type {
 import type { ValidatedClientMessage } from "../validation/messages.js";
 import type { ConnectionTracker, PlayerConnection } from "./connection.js";
 
+const defaultGameRegistry = createDefaultGameRegistry();
+
 export interface ProtocolHandlerDependencies {
   sessionStore: InMemorySessionStore;
   roomManager: RoomManager;
   connectionTracker: ConnectionTracker;
   logger: FastifyBaseLogger;
+  gameRegistry?: GameAdapterRegistry;
 }
 
 export function broadcastToRoom<T>(
@@ -48,6 +54,7 @@ export async function handleClientMessage(
   deps: ProtocolHandlerDependencies
 ): Promise<void> {
   const { sessionStore, roomManager, connectionTracker, logger } = deps;
+  const gameRegistry = deps.gameRegistry ?? defaultGameRegistry;
 
   switch (message.type) {
     case "session.identify": {
@@ -136,6 +143,20 @@ export async function handleClientMessage(
       const { room, reconnectToken } = result.data;
       logger.info({ roomId: room.id, roomCode: room.code, playerId: connection.playerId }, "Player joined room");
 
+      // If room became full and game state not yet initialized, initialize authoritative game state
+      if (room.isFull() && !room.gameState) {
+        const host = Array.from(room.players.values()).find((p) => p.seat === 0);
+        const guest = Array.from(room.players.values()).find((p) => p.seat === 1);
+        const adapter = gameRegistry.get(room.gameId);
+        if (adapter && host && guest) {
+          room.gameState = adapter.createInitialState({
+            hostPlayerId: host.playerId,
+            guestPlayerId: guest.playerId,
+            startingPlayer: "X",
+          });
+        }
+      }
+
       // Send join response to current player
       connection.send<RoomJoinedPayload>({
         version: PROTOCOL_VERSION,
@@ -161,6 +182,23 @@ export async function handleClientMessage(
         connectionTracker,
         connection.playerId
       );
+
+      // If game state is active, broadcast game.state to all players
+      if (room.gameState) {
+        broadcastToRoom<GameStatePayload>(
+          room,
+          {
+            version: PROTOCOL_VERSION,
+            type: "game.state",
+            payload: {
+              roomId: room.id,
+              version: room.version,
+              gameState: room.gameState,
+            },
+          },
+          connectionTracker
+        );
+      }
       break;
     }
 
@@ -241,6 +279,18 @@ export async function handleClientMessage(
         connectionTracker,
         playerId
       );
+
+      if (room.gameState) {
+        connection.send<GameStatePayload>({
+          version: PROTOCOL_VERSION,
+          type: "game.state",
+          payload: {
+            roomId: room.id,
+            version: room.version,
+            gameState: room.gameState,
+          },
+        });
+      }
       break;
     }
 
@@ -254,6 +304,146 @@ export async function handleClientMessage(
           clientTime: message.payload.clientTime,
         },
       });
+      break;
+    }
+
+    case "game.move": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before making a move", message.requestId);
+        return;
+      }
+
+      const room = roomManager.getRoomById(message.payload.roomId);
+      if (!room || !room.players.has(connection.playerId)) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in the specified room", message.requestId);
+        return;
+      }
+
+      if (room.status !== "in-progress" || !room.gameState) {
+        connection.sendError("GAME_NOT_IN_PROGRESS", "Game is not currently active", message.requestId);
+        return;
+      }
+
+      const adapter = gameRegistry.get(room.gameId);
+      if (!adapter) {
+        connection.sendError("INTERNAL_ERROR", `No game adapter registered for ${room.gameId}`, message.requestId);
+        return;
+      }
+
+      const validation = adapter.validateAction(
+        room.gameState,
+        { type: "MOVE", position: message.payload.position },
+        connection.playerId
+      );
+
+      if (!validation.valid) {
+        const errorCode: ErrorCode =
+          validation.error === "It is not your turn"
+            ? "NOT_YOUR_TURN"
+            : validation.error === "Invalid move position"
+            ? "INVALID_MOVE"
+            : validation.error === "Game is not in progress"
+            ? "GAME_NOT_IN_PROGRESS"
+            : "INVALID_MESSAGE";
+        connection.sendError(errorCode, validation.error ?? "Invalid move", message.requestId);
+        return;
+      }
+
+      const actionResult = adapter.applyAction(
+        room.gameState,
+        { type: "MOVE", position: message.payload.position },
+        connection.playerId
+      );
+
+      room.gameState = actionResult.nextState;
+      const nextState = actionResult.nextState as { status?: string };
+      if (nextState.status === "won" || nextState.status === "draw") {
+        room.status = "completed";
+      }
+
+      room.incrementVersion();
+
+      broadcastToRoom<GameStatePayload>(
+        room,
+        {
+          version: PROTOCOL_VERSION,
+          type: "game.state",
+          payload: {
+            roomId: room.id,
+            version: room.version,
+            gameState: room.gameState,
+          },
+        },
+        connectionTracker
+      );
+      break;
+    }
+
+    case "game.rematch": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before requesting rematch", message.requestId);
+        return;
+      }
+
+      const room = roomManager.getRoomById(message.payload.roomId);
+      if (!room || !room.players.has(connection.playerId)) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in the specified room", message.requestId);
+        return;
+      }
+
+      if (!room.gameState) {
+        connection.sendError("GAME_NOT_IN_PROGRESS", "No active game in room", message.requestId);
+        return;
+      }
+
+      const adapter = gameRegistry.get(room.gameId);
+      if (!adapter) {
+        connection.sendError("INTERNAL_ERROR", `No game adapter registered for ${room.gameId}`, message.requestId);
+        return;
+      }
+
+      const validation = adapter.validateAction(
+        room.gameState,
+        { type: "REMATCH" },
+        connection.playerId
+      );
+
+      if (!validation.valid) {
+        const errorCode: ErrorCode =
+          validation.error === "Game is still in progress"
+            ? "GAME_NOT_OVER"
+            : "INVALID_MESSAGE";
+        connection.sendError(errorCode, validation.error ?? "Invalid rematch request", message.requestId);
+        return;
+      }
+
+      const actionResult = adapter.applyAction(
+        room.gameState,
+        { type: "REMATCH" },
+        connection.playerId
+      );
+
+      room.gameState = actionResult.nextState;
+      const nextState = actionResult.nextState as { status?: string };
+      if (nextState.status === "in_progress") {
+        room.status = "in-progress";
+      }
+
+      room.incrementVersion();
+
+      broadcastToRoom<GameStatePayload>(
+        room,
+        {
+          version: PROTOCOL_VERSION,
+          type: "game.state",
+          payload: {
+            roomId: room.id,
+            version: room.version,
+            gameState: room.gameState,
+          },
+        },
+        connectionTracker
+      );
       break;
     }
   }

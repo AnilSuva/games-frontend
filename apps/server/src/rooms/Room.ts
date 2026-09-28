@@ -163,6 +163,7 @@ export class Room {
       maxPlayers: this.maxPlayers,
       version: this.version,
       createdAt: this.createdAt,
+      gameState: this.gameState,
     };
   }
 }

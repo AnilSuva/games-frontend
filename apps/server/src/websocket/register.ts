@@ -12,6 +12,8 @@ import { ConnectionTracker, PlayerConnection } from "./connection.js";
 import { HeartbeatService } from "./heartbeat.js";
 import { broadcastToRoom, handleClientMessage } from "./protocol.js";
 
+import type { GameAdapterRegistry } from "../games/index.js";
+
 export interface WebSocketServiceContext {
   connectionTracker: ConnectionTracker;
   heartbeatService: HeartbeatService;
@@ -23,9 +25,10 @@ export async function registerWebSocket(
     config: ServerConfig;
     sessionStore: InMemorySessionStore;
     roomManager: RoomManager;
+    gameRegistry?: GameAdapterRegistry;
   }
 ): Promise<WebSocketServiceContext> {
-  const { config, sessionStore, roomManager } = options;
+  const { config, sessionStore, roomManager, gameRegistry } = options;
   const connectionTracker = new ConnectionTracker();
 
   // Register fastify-websocket plugin with strict options
@@ -128,6 +131,7 @@ export async function registerWebSocket(
             roomManager,
             connectionTracker,
             logger: fastify.log,
+            gameRegistry,
           });
         } catch (err) {
           fastify.log.error(

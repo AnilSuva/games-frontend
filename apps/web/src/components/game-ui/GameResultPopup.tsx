@@ -14,6 +14,8 @@ interface GameResultPopupProps {
   onClose: () => void;
   /** Home route (defaults to "/") */
   homeHref?: string;
+  /** Optional custom label for the Play Again button */
+  playAgainText?: string;
 }
 
 /**
@@ -26,6 +28,7 @@ export function GameResultPopup({
   onPlayAgain,
   onClose,
   homeHref = "/",
+  playAgainText = "Play Again",
 }: GameResultPopupProps) {
   const handlePlayAgain = () => {
     soundManager.play("buttonClick");
@@ -88,7 +91,7 @@ export function GameResultPopup({
             onClick={handlePlayAgain}
             className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-[#1c1917] sm:hover:bg-[#322f2c] active:bg-black transition-colors shadow-xs cursor-pointer flex items-center justify-center"
           >
-            Play Again
+            {playAgainText}
           </button>
 
           <Link

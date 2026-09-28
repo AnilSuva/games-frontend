@@ -11,9 +11,11 @@ import { TicTacToeCell } from "./TicTacToeCell";
 import { WinningStrike } from "./WinningStrike";
 import { soundManager } from "@/platform/audio";
 import { createResultSoundGuard, getResultSound } from "@/games/common/resultSound";
+import { useOnlineTicTacToe } from "@/platform/multiplayer/useOnlineTicTacToe";
+import { OnlineLobby } from "./OnlineLobby";
 
 interface SessionConfig {
-  mode: "1v1" | "vs-bot";
+  mode: "1v1" | "vs-bot" | "online";
   difficulty: BotDifficulty;
 }
 
@@ -35,10 +37,9 @@ const TIC_TAC_TOE_MODES: GameModeOption[] = [
     },
   },
   {
-    id: "multiplayer",
-    label: "Multiplayer",
-    disabled: true,
-    disabledBadge: "Coming Soon",
+    id: "online",
+    label: "Online",
+    description: "Play with a Friend",
   },
 ];
 
@@ -76,6 +77,10 @@ export default function TicTacToeGame({
   const [state, dispatch] = useReducer(ticTacToeReducer, undefined, createInitialState);
   const botAbortControllerRef = useRef<AbortController | null>(null);
   const resultSoundGuardRef = useRef(createResultSoundGuard());
+  const onlineResultSoundGuardRef = useRef(createResultSoundGuard());
+
+  // Online multiplayer hook
+  const online = useOnlineTicTacToe();
 
   /** Cancels any in-flight bot request and resets the result-sound guard. */
   const cancelBotRequest = useCallback(() => {
@@ -92,31 +97,63 @@ export default function TicTacToeGame({
     onLifecycleChange?.("pre-game");
   }, [onLifecycleChange]);
 
-  // Derived state directly from pure reducer (no cascading setState in effects)
+  // Derived state directly from pure reducer (for local & bot modes)
   const isGameOver = state.status === "won" || state.status === "draw";
+
+  // Derived state for online mode
+  const isOnlineGameOver =
+    sessionConfig.mode === "online" &&
+    (online.gameState?.status === "won" || online.gameState?.status === "draw");
 
   // Delayed result popup sequence (1–2s delay after win or draw)
   useEffect(() => {
-    if (!isGameOver) return;
+    const gameOver = sessionConfig.mode === "online" ? isOnlineGameOver : isGameOver;
+    if (!gameOver) return;
 
     const timer = setTimeout(() => {
       setShowResultPopup(true);
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [isGameOver]);
+  }, [isGameOver, isOnlineGameOver, sessionConfig.mode]);
 
   // Synchronize active player turn to platform frame atmosphere
   useEffect(() => {
-    if (inModeSelection || isGameOver) {
+    if (inModeSelection) {
       onTurnChange?.(null);
-    } else {
-      onTurnChange?.(state.currentPlayer);
+      return;
     }
-  }, [inModeSelection, isGameOver, state.currentPlayer, onTurnChange]);
+
+    if (sessionConfig.mode === "online") {
+      if (online.gameState && online.connectionState === "in_game" && !isOnlineGameOver) {
+        onTurnChange?.(online.gameState.currentPlayer);
+      } else {
+        onTurnChange?.(null);
+      }
+    } else {
+      if (isGameOver) {
+        onTurnChange?.(null);
+      } else {
+        onTurnChange?.(state.currentPlayer);
+      }
+    }
+  }, [
+    inModeSelection,
+    isGameOver,
+    isOnlineGameOver,
+    state.currentPlayer,
+    sessionConfig.mode,
+    online.gameState,
+    online.connectionState,
+    onTurnChange,
+  ]);
 
   // Starts a fresh match preserving the current mode and difficulty configuration
   const startFreshMatch = useCallback(() => {
+    if (sessionConfig.mode === "online") {
+      online.requestRematch();
+      return;
+    }
     cancelBotRequest();
     const starter = consumeStartingPlayer("tic-tac-toe");
     const startingPlayer = starter === "orange" ? "X" : "O";
@@ -126,30 +163,45 @@ export default function TicTacToeGame({
     setIsPopupDismissed(false);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
-  }, [cancelBotRequest, onLifecycleChange, onScoreUpdate]);
+  }, [cancelBotRequest, onLifecycleChange, onScoreUpdate, sessionConfig.mode, online]);
 
   // Mode Selection Handlers (via shared GameModeSelector)
   const handleSelectMode = useCallback(
     (modeId: string) => {
-      // Only "1v1" is a direct-select mode; bot flows through handleSelectConfiguredMode
-      if (modeId !== "1v1") return;
-      cancelBotRequest();
-      setSessionConfig({ mode: "1v1", difficulty: "medium" });
-      const starter = consumeStartingPlayer("tic-tac-toe");
-      const startingPlayer = starter === "orange" ? "X" : "O";
-      dispatch({ type: "RESET", startingPlayer });
-      setInModeSelection(false);
-      setShowResultPopup(false);
-      setIsPopupDismissed(false);
-      onLifecycleChange?.("playing");
-      onScoreUpdate?.(0);
+      if (modeId === "1v1") {
+        cancelBotRequest();
+        online.disconnect();
+        setSessionConfig({ mode: "1v1", difficulty: "medium" });
+        const starter = consumeStartingPlayer("tic-tac-toe");
+        const startingPlayer = starter === "orange" ? "X" : "O";
+        dispatch({ type: "RESET", startingPlayer });
+        setInModeSelection(false);
+        setShowResultPopup(false);
+        setIsPopupDismissed(false);
+        onLifecycleChange?.("playing");
+        onScoreUpdate?.(0);
+        return;
+      }
+
+      if (modeId === "online") {
+        cancelBotRequest();
+        setSessionConfig({ mode: "online", difficulty: "medium" });
+        setInModeSelection(false);
+        setShowResultPopup(false);
+        setIsPopupDismissed(false);
+        onLifecycleChange?.("playing");
+        onScoreUpdate?.(0);
+        online.connect();
+        return;
+      }
     },
-    [cancelBotRequest, onLifecycleChange, onScoreUpdate]
+    [cancelBotRequest, onLifecycleChange, onScoreUpdate, online]
   );
 
   const handleSelectConfiguredMode = useCallback(
     (_modeId: string, configValue: string) => {
       cancelBotRequest();
+      online.disconnect();
       setSessionConfig({
         mode: "vs-bot",
         difficulty: configValue as BotDifficulty,
@@ -163,14 +215,17 @@ export default function TicTacToeGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [cancelBotRequest, onLifecycleChange, onScoreUpdate]
+    [cancelBotRequest, onLifecycleChange, onScoreUpdate, online]
   );
 
   const handleReturnToModes = useCallback(() => {
     botAbortControllerRef.current?.abort();
+    online.disconnect();
     setInModeSelection(true);
+    setShowResultPopup(false);
+    setIsPopupDismissed(false);
     onLifecycleChange?.("pre-game");
-  }, [onLifecycleChange]);
+  }, [onLifecycleChange, online]);
 
   // Connect platform pause/restart controller
   useEffect(() => {
@@ -184,8 +239,10 @@ export default function TicTacToeGame({
     };
   }, [startFreshMatch, onReady]);
 
-  // Synchronize game over to external platform callbacks
+  // Synchronize local / bot game over to external platform callbacks
   useEffect(() => {
+    if (sessionConfig.mode === "online") return;
+
     if (state.status === "won" || state.status === "draw") {
       const resultSound = resultSoundGuardRef.current.claim(
         getResultSound({
@@ -210,6 +267,50 @@ export default function TicTacToeGame({
       });
     }
   }, [state.status, state.winner, sessionConfig, onGameOver, onScoreUpdate, onLifecycleChange]);
+
+  // Synchronize online game over and sound behavior
+  useEffect(() => {
+    if (sessionConfig.mode !== "online" || !online.gameState) return;
+    const status = online.gameState.status;
+
+    if (status === "won") {
+      const isWinner = online.isWinner;
+      const soundType = isWinner ? "victory" : "lose";
+      const sound = onlineResultSoundGuardRef.current.claim(soundType);
+      if (sound === "victory") soundManager.playVictory();
+      if (sound === "lose") soundManager.playLose();
+
+      onLifecycleChange?.("finished");
+      const score = isWinner ? 100 : 0;
+      onScoreUpdate?.(score);
+      onGameOver({
+        winner: online.winnerMark,
+        score,
+        details: { mode: "online" },
+      });
+    } else if (status === "draw") {
+      // Draw: no result sound
+      onLifecycleChange?.("finished");
+      onScoreUpdate?.(50);
+      onGameOver({
+        winner: null,
+        score: 50,
+        details: { mode: "online" },
+      });
+    } else if (status === "in_progress") {
+      onlineResultSoundGuardRef.current.reset();
+      onLifecycleChange?.("playing");
+    }
+  }, [
+    sessionConfig.mode,
+    online.gameState?.status,
+    online.isWinner,
+    online.winnerMark,
+    onGameOver,
+    onScoreUpdate,
+    onLifecycleChange,
+    online.gameState,
+  ]);
 
   // Bot Turn Automation
   useEffect(() => {
@@ -267,6 +368,203 @@ export default function TicTacToeGame({
       />
     );
   }
+
+  // ─── ONLINE MODE LOBBY / BOARD RENDERING ───────────────────────────────────
+
+  if (sessionConfig.mode === "online") {
+    const isInOnlineMatch =
+      (online.connectionState === "in_game" || online.connectionState === "game_over") &&
+      Boolean(online.gameState);
+
+    if (!isInOnlineMatch) {
+      return (
+        <OnlineLobby
+          connectionState={online.connectionState}
+          room={online.room}
+          errorMessage={online.errorMessage}
+          onCreateRoom={online.createRoom}
+          onJoinRoom={online.joinRoom}
+          onLeaveRoom={online.leaveRoom}
+          onReturnToModes={handleReturnToModes}
+        />
+      );
+    }
+
+    const onlineWinningIndices = online.gameState?.winningLine
+      ? new Set(online.gameState.winningLine.line)
+      : null;
+
+    const onlineResultMessage =
+      online.gameState?.status === "won"
+        ? online.isWinner
+          ? "You won!"
+          : "Opponent won"
+        : "Draw";
+
+    const onlineResultAccent =
+      online.gameState?.status === "draw"
+        ? null
+        : online.winnerMark === "X"
+        ? "#e0530a"
+        : "#2563eb";
+
+    return (
+      <div className="flex flex-col items-center w-full gap-3 p-2 select-none">
+        {/* Screen Reader Live Region */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {isOnlineGameOver
+            ? onlineResultMessage
+            : `${online.isMyTurn ? "Your" : "Opponent's"} turn`}
+        </div>
+
+        {/* Online Header: Player identity, turn indicator, opponent status */}
+        <div className="flex items-center justify-between w-full max-w-[340px] sm:max-w-[380px] px-1 text-xs">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{
+                backgroundColor: online.myMark === "X" ? "#e0530a" : "#2563eb",
+              }}
+            />
+            <span className="text-[#1c1917] font-semibold">
+              You: {online.myMark === "X" ? "Orange (X)" : "Blue (O)"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!online.isOpponentConnected ? (
+              <span className="text-[11px] text-[#e0530a] font-medium animate-pulse">
+                Opponent reconnecting...
+              </span>
+            ) : online.gameState?.status === "in_progress" ? (
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                  online.isMyTurn
+                    ? "bg-[#fef3c7] text-[#92400e]"
+                    : "bg-[#f3f4f6] text-[#6b7280]"
+                }`}
+              >
+                {online.isMyTurn ? "Your Turn" : "Opponent's Turn"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* 3x3 Board with SVG Winning Line Strike-Through */}
+        <div className="active-board-square relative aspect-square">
+          <div
+            className="w-full h-full p-2.5 sm:p-3 bg-[#faf9f6] rounded-2xl border border-[#e6e3dc] shadow-sm grid grid-cols-3 gap-2.5 sm:gap-3"
+            role="grid"
+            aria-label="Tic-Tac-Toe Board"
+          >
+            {online.gameState?.board.map((cellValue, idx) => (
+              <TicTacToeCell
+                key={idx}
+                index={idx}
+                value={cellValue}
+                isWinningCell={onlineWinningIndices?.has(idx) ?? false}
+                winner={online.winnerMark}
+                isDisabled={
+                  online.gameState?.status !== "in_progress" ||
+                  !online.isMyTurn ||
+                  !online.isOpponentConnected ||
+                  cellValue !== null
+                }
+                onClick={(i) => {
+                  if (online.isMyTurn && online.gameState?.board[i] === null) {
+                    soundManager.play("buttonClick");
+                    online.sendMove(i);
+                  }
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Animated Winning Strike-Through Line */}
+          {online.gameState?.winningLine && (
+            <WinningStrike
+              winningLine={online.gameState.winningLine}
+              winner={online.winnerMark}
+            />
+          )}
+
+          {/* Result Popup - Appears after delay */}
+          {isOnlineGameOver && showResultPopup && !isPopupDismissed && (
+            <GameResultPopup
+              resultText={onlineResultMessage}
+              accentColor={onlineResultAccent}
+              onClose={() => setIsPopupDismissed(true)}
+              onPlayAgain={() => {
+                soundManager.play("buttonClick");
+                online.requestRematch();
+              }}
+              playAgainText={
+                online.hasRequestedRematch
+                  ? "Waiting for opponent..."
+                  : online.opponentRequestedRematch
+                  ? "Accept Rematch"
+                  : "Play Again"
+              }
+            />
+          )}
+        </div>
+
+        {/* Bottom Actions Area */}
+        <div className="w-full max-w-[340px] sm:max-w-[380px] flex items-center justify-between px-1 min-h-[32px]">
+          {!isOnlineGameOver ? (
+            <div className="w-full flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  online.leaveRoom();
+                  handleReturnToModes();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                ← Leave Room
+              </button>
+
+              <span className="text-[11px] font-mono text-[#9c978e]">
+                Room: {online.room?.roomCode}
+              </span>
+            </div>
+          ) : isPopupDismissed ? (
+            <div className="w-full flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  online.leaveRoom();
+                  handleReturnToModes();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                ← Leave Room
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  online.requestRematch();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                {online.hasRequestedRematch
+                  ? "Waiting for opponent..."
+                  : online.opponentRequestedRematch
+                  ? "Accept Rematch"
+                  : "Play Again"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── LOCAL 1v1 & BOT MODE BOARD RENDERING ──────────────────────────────────
 
   const isPlayer1Turn = state.currentPlayer === "X";
   const winningIndices = state.winningLine ? new Set(state.winningLine.line) : null;
@@ -392,3 +690,4 @@ export default function TicTacToeGame({
     </div>
   );
 }
+

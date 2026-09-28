@@ -12,7 +12,11 @@ export type ErrorCode =
   | "INVALID_ROOM_STATE"
   | "RECONNECT_EXPIRED"
   | "RATE_LIMITED"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "NOT_YOUR_TURN"
+  | "INVALID_MOVE"
+  | "GAME_NOT_IN_PROGRESS"
+  | "GAME_NOT_OVER";
 
 export type RoomStatus = "waiting" | "in-progress" | "completed" | "abandoned";
 
@@ -34,6 +38,7 @@ export interface RoomDto {
   maxPlayers: number;
   version: number;
   createdAt: number;
+  gameState?: unknown;
 }
 
 export type ClientMessageType =
@@ -42,7 +47,9 @@ export type ClientMessageType =
   | "room.join"
   | "room.leave"
   | "room.reconnect"
-  | "ping";
+  | "ping"
+  | "game.move"
+  | "game.rematch";
 
 export type ServerMessageType =
   | "session.ready"
@@ -51,7 +58,8 @@ export type ServerMessageType =
   | "room.updated"
   | "room.left"
   | "room.error"
-  | "server.pong";
+  | "server.pong"
+  | "game.state";
 
 export interface ClientEnvelope<T = unknown> {
   version: 1;
@@ -97,6 +105,15 @@ export interface ClientPingPayload {
   clientTime?: number;
 }
 
+export interface GameMovePayload {
+  roomId: string;
+  position: number;
+}
+
+export interface GameRematchPayload {
+  roomId: string;
+}
+
 // Server payloads
 export interface SessionReadyPayload {
   playerId: string;
@@ -133,4 +150,10 @@ export interface RoomErrorPayload {
 export interface ServerPongPayload {
   serverTime: number;
   clientTime?: number;
+}
+
+export interface GameStatePayload {
+  roomId: string;
+  version: number;
+  gameState: unknown;
 }

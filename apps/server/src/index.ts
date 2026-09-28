@@ -5,12 +5,14 @@ import { InMemorySessionStore } from "./auth/session.js";
 import { registerHttpRoutes } from "./http/routes.js";
 import { RoomManager } from "./rooms/RoomManager.js";
 import { type WebSocketServiceContext, registerWebSocket } from "./websocket/register.js";
+import { createDefaultGameRegistry, type GameAdapterRegistry } from "./games/index.js";
 
 export interface ServerInstance {
   app: FastifyInstance;
   roomManager: RoomManager;
   sessionStore: InMemorySessionStore;
   wsContext: WebSocketServiceContext;
+  gameRegistry: GameAdapterRegistry;
   stop: () => Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export async function buildApp(
 
   const sessionStore = new InMemorySessionStore();
   const roomManager = new RoomManager(config.disconnectGracePeriodMs);
+  const gameRegistry = createDefaultGameRegistry();
 
   // Register HTTP routes
   await registerHttpRoutes(app);
@@ -37,6 +40,7 @@ export async function buildApp(
     config,
     sessionStore,
     roomManager,
+    gameRegistry,
   });
 
   // Stale room cleanup timer
@@ -64,6 +68,7 @@ export async function buildApp(
     roomManager,
     sessionStore,
     wsContext,
+    gameRegistry,
     stop,
   };
 }
