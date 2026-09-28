@@ -33,6 +33,10 @@ export function WheelDisplay({
 }: WheelDisplayProps) {
   const wheelRef = useRef<SVGSVGElement>(null);
   const visualRotation = useRef(0);
+  // Stable ref so the RAF loop always calls the current handler without
+  // needing onSpinEnd in the animation effect's dependency array.
+  const onSpinEndRef = useRef(onSpinEnd);
+  useEffect(() => { onSpinEndRef.current = onSpinEnd; });
 
   useEffect(() => {
     void soundManager.preloadSpinTicks();
@@ -87,7 +91,7 @@ export function WheelDisplay({
         animationCompleted = true;
         visualRotation.current = rotation;
         wheel.style.willChange = "auto";
-        onSpinEnd("transform");
+        onSpinEndRef.current("transform");
       }
     };
 
@@ -97,7 +101,7 @@ export function WheelDisplay({
       if (!animationCompleted) soundManager.stopSpinTicks();
       wheel.style.willChange = "auto";
     };
-  }, [isSpinning, onSpinEnd, participants.length, rotation, spinDuration]);
+  }, [isSpinning, participants.length, rotation, spinDuration]);
 
   const buttonAriaLabel = isSpinning
     ? "Wheel spinning"

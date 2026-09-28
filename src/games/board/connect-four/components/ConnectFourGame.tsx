@@ -98,6 +98,20 @@ export default function ConnectFourGame({
   const columnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const resultSoundGuardRef = useRef(createResultSoundGuard());
 
+  /**
+   * Cancels any in-flight bot request and animation frame, and clears the
+   * active-drop state. Call this before every mode transition or match reset.
+   */
+  const cleanupActiveSession = useCallback(() => {
+    botAbortControllerRef.current?.abort();
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
+    }
+    isDropActiveRef.current = false;
+    setActiveDrop(null);
+  }, []);
+
   useEffect(() => {
     void soundManager.preloadResultSounds();
   }, []);
@@ -237,14 +251,8 @@ export default function ConnectFourGame({
   }, [activeDrop]);
 
   const startFreshMatch = useCallback(() => {
-    botAbortControllerRef.current?.abort();
+    cleanupActiveSession();
     resultSoundGuardRef.current.reset();
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-      animFrameIdRef.current = null;
-    }
-    isDropActiveRef.current = false;
-    setActiveDrop(null);
 
     const starter = consumeStartingPlayer("connect-four");
     const startingPlayer = starter === "orange" ? "R" : "Y";
@@ -254,19 +262,14 @@ export default function ConnectFourGame({
     setIsPopupDismissed(false);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
-  }, [onLifecycleChange, onScoreUpdate]);
+  }, [cleanupActiveSession, onLifecycleChange, onScoreUpdate]);
 
   const handleSelectMode = useCallback(
     (modeId: string) => {
-      botAbortControllerRef.current?.abort();
+      cleanupActiveSession();
       resultSoundGuardRef.current.reset();
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-        animFrameIdRef.current = null;
-      }
-      isDropActiveRef.current = false;
-      setActiveDrop(null);
 
+      // Only 1v1 is a direct-select mode; bot flows through handleSelectConfiguredMode
       if (modeId === "1v1") {
         setSessionConfig({ mode: "1v1", difficulty: "medium" });
       }
@@ -279,19 +282,13 @@ export default function ConnectFourGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [onLifecycleChange, onScoreUpdate]
+    [cleanupActiveSession, onLifecycleChange, onScoreUpdate]
   );
 
   const handleSelectConfiguredMode = useCallback(
     (_modeId: string, configValue: string) => {
-      botAbortControllerRef.current?.abort();
+      cleanupActiveSession();
       resultSoundGuardRef.current.reset();
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-        animFrameIdRef.current = null;
-      }
-      isDropActiveRef.current = false;
-      setActiveDrop(null);
 
       setSessionConfig({
         mode: "vs-bot",
@@ -306,21 +303,14 @@ export default function ConnectFourGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [onLifecycleChange, onScoreUpdate]
+    [cleanupActiveSession, onLifecycleChange, onScoreUpdate]
   );
 
   const handleReturnToModes = useCallback(() => {
-    botAbortControllerRef.current?.abort();
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-      animFrameIdRef.current = null;
-    }
-    isDropActiveRef.current = false;
-    setActiveDrop(null);
-
+    cleanupActiveSession();
     setInModeSelection(true);
     onLifecycleChange?.("pre-game");
-  }, [onLifecycleChange]);
+  }, [cleanupActiveSession, onLifecycleChange]);
 
   useEffect(() => {
     const controller: IGameController = {

@@ -48,6 +48,8 @@ export default async function GamePage({ params }: GamePageProps) {
     notFound();
   }
 
+  // Spin Wheel is a standalone experience that manages its own full-page layout
+  // and does not need the shared GameContainer HUD, pause modal, or atmosphere.
   if (game.id === "spin-wheel") {
     return <SpinWheel />;
   }

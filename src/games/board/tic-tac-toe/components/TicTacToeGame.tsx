@@ -77,6 +77,12 @@ export default function TicTacToeGame({
   const botAbortControllerRef = useRef<AbortController | null>(null);
   const resultSoundGuardRef = useRef(createResultSoundGuard());
 
+  /** Cancels any in-flight bot request and resets the result-sound guard. */
+  const cancelBotRequest = useCallback(() => {
+    botAbortControllerRef.current?.abort();
+    resultSoundGuardRef.current.reset();
+  }, []);
+
   useEffect(() => {
     void soundManager.preloadResultSounds();
   }, []);
@@ -111,8 +117,7 @@ export default function TicTacToeGame({
 
   // Starts a fresh match preserving the current mode and difficulty configuration
   const startFreshMatch = useCallback(() => {
-    botAbortControllerRef.current?.abort();
-    resultSoundGuardRef.current.reset();
+    cancelBotRequest();
     const starter = consumeStartingPlayer("tic-tac-toe");
     const startingPlayer = starter === "orange" ? "X" : "O";
     dispatch({ type: "RESET", startingPlayer });
@@ -121,16 +126,15 @@ export default function TicTacToeGame({
     setIsPopupDismissed(false);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
-  }, [onLifecycleChange, onScoreUpdate]);
+  }, [cancelBotRequest, onLifecycleChange, onScoreUpdate]);
 
   // Mode Selection Handlers (via shared GameModeSelector)
   const handleSelectMode = useCallback(
     (modeId: string) => {
-      botAbortControllerRef.current?.abort();
-      resultSoundGuardRef.current.reset();
-      if (modeId === "1v1") {
-        setSessionConfig({ mode: "1v1", difficulty: "medium" });
-      }
+      // Only "1v1" is a direct-select mode; bot flows through handleSelectConfiguredMode
+      if (modeId !== "1v1") return;
+      cancelBotRequest();
+      setSessionConfig({ mode: "1v1", difficulty: "medium" });
       const starter = consumeStartingPlayer("tic-tac-toe");
       const startingPlayer = starter === "orange" ? "X" : "O";
       dispatch({ type: "RESET", startingPlayer });
@@ -140,13 +144,12 @@ export default function TicTacToeGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [onLifecycleChange, onScoreUpdate]
+    [cancelBotRequest, onLifecycleChange, onScoreUpdate]
   );
 
   const handleSelectConfiguredMode = useCallback(
     (_modeId: string, configValue: string) => {
-      botAbortControllerRef.current?.abort();
-      resultSoundGuardRef.current.reset();
+      cancelBotRequest();
       setSessionConfig({
         mode: "vs-bot",
         difficulty: configValue as BotDifficulty,
@@ -160,7 +163,7 @@ export default function TicTacToeGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [onLifecycleChange, onScoreUpdate]
+    [cancelBotRequest, onLifecycleChange, onScoreUpdate]
   );
 
   const handleReturnToModes = useCallback(() => {

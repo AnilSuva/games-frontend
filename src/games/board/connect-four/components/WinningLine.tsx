@@ -51,24 +51,6 @@ export function WinningLine({ winningLine, winner }: WinningLineProps) {
         strokeLinecap="round"
         className="winning-line-anim"
       />
-      <style jsx>{`
-        .winning-line-anim {
-          stroke-dasharray: 120;
-          stroke-dashoffset: 120;
-          animation: drawLine 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes drawLine {
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .winning-line-anim {
-            animation: none;
-            stroke-dashoffset: 0;
-          }
-        }
-      `}</style>
     </svg>
   );
 }

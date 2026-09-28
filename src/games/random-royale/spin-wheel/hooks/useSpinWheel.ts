@@ -75,7 +75,7 @@ export function useSpinWheel(initialParticipants: Participant[] = []): UseSpinWh
     [participants]
   );
 
-  const handleAdd = (event?: FormEvent<HTMLFormElement>) => {
+  const handleAdd = useCallback((event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     if (isSpinning || spinningLock.current) return;
 
@@ -92,29 +92,29 @@ export function useSpinWheel(initialParticipants: Participant[] = []): UseSpinWh
     setName("");
     setWinner(null);
     setHasSpun(false);
-  };
+  }, [isSpinning, name, participants]);
 
-  const handleRemove = (id: string) => {
+  const handleRemove = useCallback((id: string) => {
     if (isSpinning || spinningLock.current) return;
     setParticipants((current) => removeParticipantUtil(current, id));
     setWinner(null);
     setHasSpun(false);
-  };
+  }, [isSpinning]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (isSpinning || spinningLock.current) return;
     setParticipants([]);
     setWinner(null);
     setHasSpun(false);
-  };
+  }, [isSpinning]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     if (spinningLock.current) return;
     soundManager.stopSpinTicks();
     setWinner(null);
     setHasSpun(false);
     setRotation(0);
-  };
+  }, []);
 
   const handleSpin = () => {
     if (spinningLock.current || participants.length === 0) return;

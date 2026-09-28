@@ -5,8 +5,9 @@ import type { GameCategory, GameManifest, GameMetadata } from "./types";
  * Strips non-serializable fields (like functions) to safely pass to React Server Components.
  */
 function toMetadata(manifest: GameManifest): GameMetadata {
-  const { loader: _unusedLoader, ...metadata } = manifest;
-  void _unusedLoader;
+  // Omit the non-serializable loader function before passing to Server Components
+  const { loader: _loader, ...metadata } = manifest;
+  void _loader; // suppress unused-variable warning — loader is intentionally excluded
   return metadata;
 }
 

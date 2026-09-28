@@ -100,28 +100,6 @@ export function GameResultPopup({
           </Link>
         </div>
       </div>
-
-      <style jsx>{`
-        .result-popup-card {
-          animation: popupCardIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes popupCardIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .result-popup-card {
-            animation: none;
-            opacity: 1;
-          }
-        }
-      `}</style>
     </div>
   );
 }

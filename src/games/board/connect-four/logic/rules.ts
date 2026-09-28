@@ -1,7 +1,6 @@
 import type {
   Board,
   CellValue,
-  ConnectFourState,
   Player,
   WinDirection,
   WinningLine,
@@ -30,21 +29,6 @@ export function createInitialColumnCounts(): [
   number, number, number, number, number, number, number
 ] {
   return [0, 0, 0, 0, 0, 0, 0];
-}
-
-/**
- * Creates the clean initial state for a new match.
- */
-export function createInitialState(startingPlayer: "R" | "Y" = "R"): ConnectFourState {
-  return {
-    board: createEmptyBoard(),
-    columnCounts: createInitialColumnCounts(),
-    currentPlayer: startingPlayer,
-    status: "in_progress",
-    winner: null,
-    winningLine: null,
-    moveCount: 0,
-  };
 }
 
 /**

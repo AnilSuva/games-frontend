@@ -1,12 +1,17 @@
 /**
- * Legacy compatibility entrypoint.
- * All logic has been modularized into separate, dedicated modules:
- * - ../config
- * - ../types
- * - ./participantUtils
- * - ./winnerSelection
- * - ./wheelGeometry
- * - ./spinCalculation
+ * Unified test and external import surface for all spin-wheel logic.
+ *
+ * Application code should import directly from the individual modules for
+ * tree-shaking efficiency. This barrel file exists so that tests can import
+ * all logic symbols from a single path instead of chasing individual modules.
+ *
+ * Module map:
+ *   Config & constants  → ../config
+ *   Types               → ../types
+ *   Participant helpers → ./participantUtils
+ *   Winner selection    → ./winnerSelection
+ *   Wheel geometry      → ./wheelGeometry
+ *   Spin calculation    → ./spinCalculation
  */
 
 export {

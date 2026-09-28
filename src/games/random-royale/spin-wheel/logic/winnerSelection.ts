@@ -1,13 +1,15 @@
 import { MAX_PARTICIPANTS } from "../config";
 import type { Participant } from "../types";
 
+/** Reusable buffer — avoids a heap allocation on every secureUint32 call. */
+const _cryptoBuf = new Uint32Array(1);
+
 /**
  * Generates a cryptographically strong pseudo-random 32-bit unsigned integer.
  */
 export function secureUint32(): number {
-  const value = new Uint32Array(1);
-  globalThis.crypto.getRandomValues(value);
-  return value[0];
+  globalThis.crypto.getRandomValues(_cryptoBuf);
+  return _cryptoBuf[0];
 }
 
 /**

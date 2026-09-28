@@ -50,11 +50,9 @@ class SoundManager {
           // An interrupted gesture can leave the context suspended until the next tap.
         });
       }
-
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
     };
 
+    // { once: true } ensures each listener auto-removes after firing
     window.addEventListener("pointerdown", unlock, { once: true, passive: true });
     window.addEventListener("keydown", unlock, { once: true, passive: true });
   }

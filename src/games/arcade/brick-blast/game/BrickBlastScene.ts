@@ -530,6 +530,7 @@ export class BrickBlastScene extends Phaser.Scene {
   }
 
   private updateBalls(dt: number) {
+    let hadEscape = false;
     for (const ball of this.balls) {
       if (!ball.active) continue;
 
@@ -556,16 +557,20 @@ export class BrickBlastScene extends Phaser.Scene {
       if (ball.y - ball.radius > GAME_HEIGHT) {
         // Breached Orange (bottom) defense
         this.handleBallEscape(ball, "blue");
+        hadEscape = true;
       } else if (ball.y + ball.radius < 0) {
         // Breached Blue (top) defense
         this.handleBallEscape(ball, "orange");
+        hadEscape = true;
       } else {
         this.renderBall(ball);
       }
     }
 
-    // Filter out inactive balls
-    this.balls = this.balls.filter((b) => b.active);
+    // Only rebuild the array when a ball was actually lost this frame.
+    if (hadEscape) {
+      this.balls = this.balls.filter((b) => b.active);
+    }
   }
 
   private checkPaddleDeflection(ball: Ball, paddle: Paddle, bounceDirY: number) {
@@ -712,6 +717,7 @@ export class BrickBlastScene extends Phaser.Scene {
   }
 
   private updatePowerUps(dt: number) {
+    let hadPickup = false;
     for (const p of this.powerUps) {
       if (!p.active) continue;
 
@@ -727,6 +733,7 @@ export class BrickBlastScene extends Phaser.Scene {
         p.active = false;
         p.graphics.destroy();
         this.applyPowerUp(p.type, "orange");
+        hadPickup = true;
         continue;
       }
 
@@ -740,6 +747,7 @@ export class BrickBlastScene extends Phaser.Scene {
         p.active = false;
         p.graphics.destroy();
         this.applyPowerUp(p.type, "blue");
+        hadPickup = true;
         continue;
       }
 
@@ -747,12 +755,16 @@ export class BrickBlastScene extends Phaser.Scene {
       if (p.y < 0 || p.y > GAME_HEIGHT) {
         p.active = false;
         p.graphics.destroy();
+        hadPickup = true;
       } else {
         this.renderPowerUp(p);
       }
     }
 
-    this.powerUps = this.powerUps.filter((p) => p.active);
+    // Only rebuild the array when a power-up was consumed or despawned this frame.
+    if (hadPickup) {
+      this.powerUps = this.powerUps.filter((p) => p.active);
+    }
   }
 
   private applyPowerUp(type: PowerUpType, collectingPlayer: PlatformPlayer) {

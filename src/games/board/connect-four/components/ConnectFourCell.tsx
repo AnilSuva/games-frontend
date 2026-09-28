@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { Player } from "../logic/types";
 
 interface ConnectFourCellProps {
@@ -7,7 +8,7 @@ interface ConnectFourCellProps {
   isWinningCell: boolean;
 }
 
-export function ConnectFourCell({ value, isWinningCell }: ConnectFourCellProps) {
+export const ConnectFourCell = memo(function ConnectFourCell({ value, isWinningCell }: ConnectFourCellProps) {
   const isOrange = value === "R";
   const isBlue = value === "Y";
 
@@ -32,4 +33,4 @@ export function ConnectFourCell({ value, isWinningCell }: ConnectFourCellProps) 
       <div className={innerClasses} />
     </div>
   );
-}
+});

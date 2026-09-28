@@ -78,16 +78,16 @@ export default function BrickBlastGame({
 
   const handleSelectMode = useCallback(
     (modeId: string) => {
-      if (modeId === "1v1") {
-        resultSoundGuardRef.current.reset();
-        setSelectedMode("1v1");
-        setInModeSelection(false);
-        setShowResultPopup(false);
-        setIsPopupDismissed(false);
-        setGameOverResult(null);
-        onLifecycleChange?.("playing");
-        onScoreUpdate?.(0);
-      }
+      // Only "1v1" is a direct-select mode; "bot" flows through handleSelectConfiguredMode.
+      if (modeId !== "1v1") return;
+      resultSoundGuardRef.current.reset();
+      setSelectedMode("1v1");
+      setInModeSelection(false);
+      setShowResultPopup(false);
+      setIsPopupDismissed(false);
+      setGameOverResult(null);
+      onLifecycleChange?.("playing");
+      onScoreUpdate?.(0);
     },
     [onLifecycleChange, onScoreUpdate]
   );
@@ -108,6 +108,10 @@ export default function BrickBlastGame({
     onTurnChange?.(null);
   }, [onLifecycleChange, onTurnChange]);
 
+  // Stable ref to the current restart handler — passed to the Phaser controller
+  // so the controller object never becomes stale without triggering Phaser re-init.
+  const handleRestartRef = useRef<() => void>(() => {});
+
   const handleRestart = useCallback(() => {
     const nextStarter = consumeStartingPlayer("brick-blast");
     resultSoundGuardRef.current.reset();
@@ -118,6 +122,9 @@ export default function BrickBlastGame({
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
   }, [botDifficulty, onLifecycleChange, onScoreUpdate, selectedMode]);
+
+  // Keep the ref in sync with the latest handler on every render
+  handleRestartRef.current = handleRestart;
 
   const handleSelectConfiguredMode = useCallback((modeId: string, value: string) => {
     if (modeId !== "bot") return;
@@ -212,7 +219,7 @@ export default function BrickBlastGame({
         sceneRef.current = scene;
 
         const controller: IGameController = {
-          restart: handleRestart,
+          restart: () => handleRestartRef.current(),
           pause: () => scene.pauseGame(),
           resume: () => scene.resumeGame(),
           destroy: () => {
@@ -235,7 +242,10 @@ export default function BrickBlastGame({
       }
       sceneRef.current = null;
     };
-  }, [inModeSelection, selectedMode, botDifficulty, handleRestart, onGameOver, onLifecycleChange, onReady, onScoreUpdate]);
+  // Phaser initializes once when the user starts a game session (inModeSelection → false).
+  // selectedMode and botDifficulty are captured at init time via the scene init data;
+  // subsequent restarts (via handleRestartRef) pass fresh values without re-creating Phaser.
+  }, [inModeSelection, onGameOver, onLifecycleChange, onReady, onScoreUpdate]);
 
   if (inModeSelection) {
     return (
