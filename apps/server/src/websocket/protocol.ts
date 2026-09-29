@@ -154,7 +154,6 @@ export async function handleClientMessage(
           room.gameState = adapter.createInitialState({
             hostPlayerId: host.playerId,
             guestPlayerId: guest.playerId,
-            startingPlayer: "X",
           });
         }
       }
@@ -337,9 +336,14 @@ export async function handleClientMessage(
         return;
       }
 
+      const moveAction =
+        message.payload.column !== undefined
+          ? { type: "MOVE", column: message.payload.column }
+          : { type: "MOVE", position: message.payload.position };
+
       const validation = adapter.validateAction(
         room.gameState,
-        { type: "MOVE", position: message.payload.position },
+        moveAction,
         connection.playerId
       );
 
@@ -347,7 +351,10 @@ export async function handleClientMessage(
         const errorCode: ErrorCode =
           validation.error === "It is not your turn"
             ? "NOT_YOUR_TURN"
-            : validation.error === "Invalid move position" || validation.error?.includes("paused")
+            : validation.error === "Invalid move position" ||
+              validation.error === "Invalid column" ||
+              validation.error === "Column is full" ||
+              validation.error?.includes("paused")
             ? "INVALID_MOVE"
             : validation.error === "Game is not in progress"
             ? "GAME_NOT_IN_PROGRESS"
@@ -358,7 +365,7 @@ export async function handleClientMessage(
 
       const actionResult = adapter.applyAction(
         room.gameState,
-        { type: "MOVE", position: message.payload.position },
+        moveAction,
         connection.playerId
       );
 
@@ -434,6 +441,163 @@ export async function handleClientMessage(
       const nextState = actionResult.nextState as { status?: string };
       if (nextState.status === "in_progress") {
         room.status = "in-progress";
+      }
+
+      room.incrementVersion();
+
+      broadcastToRoom<GameStatePayload>(
+        room,
+        {
+          version: PROTOCOL_VERSION,
+          type: "game.state",
+          payload: {
+            roomId: room.id,
+            version: room.version,
+            gameState: room.gameState,
+          },
+        },
+        connectionTracker
+      );
+      break;
+    }
+
+    case "game.input": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before sending input", message.requestId);
+        return;
+      }
+
+      const room = roomManager.getRoomById(message.payload.roomId);
+      if (!room || !room.players.has(connection.playerId)) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in the specified room", message.requestId);
+        return;
+      }
+
+      if (room.status !== "in-progress" || !room.gameState) {
+        connection.sendError("GAME_NOT_IN_PROGRESS", "Game is not currently active", message.requestId);
+        return;
+      }
+
+      const adapter = gameRegistry.get(room.gameId);
+      if (!adapter) {
+        connection.sendError("INTERNAL_ERROR", `No game adapter registered for ${room.gameId}`, message.requestId);
+        return;
+      }
+
+      const action = {
+        type: "INPUT",
+        input: message.payload.input,
+        data: message.payload.data,
+      };
+
+      const validation = adapter.validateAction(
+        room.gameState,
+        action,
+        connection.playerId
+      );
+
+      if (!validation.valid) {
+        connection.sendError("INVALID_MOVE", validation.error ?? "Invalid input", message.requestId);
+        return;
+      }
+
+      const actionResult = adapter.applyAction(
+        room.gameState,
+        action,
+        connection.playerId
+      );
+
+      room.gameState = actionResult.nextState;
+      const nextState = actionResult.nextState as { status?: string };
+      if (nextState.status === "won" || nextState.status === "draw") {
+        room.status = "completed";
+      }
+
+      room.incrementVersion();
+
+      if (actionResult.events && actionResult.events.length > 0) {
+        for (const ev of actionResult.events) {
+          broadcastToRoom(
+            room,
+            {
+              version: PROTOCOL_VERSION,
+              type: "game.event",
+              payload: ev,
+            },
+            connectionTracker
+          );
+        }
+      } else {
+        // Forward player input to opponent(s)
+        broadcastToRoom(
+          room,
+          {
+            version: PROTOCOL_VERSION,
+            type: "game.event",
+            payload: {
+              type: "player_input",
+              playerId: connection.playerId,
+              input: message.payload.input,
+              data: message.payload.data,
+            },
+          },
+          connectionTracker,
+          connection.playerId
+        );
+      }
+      break;
+    }
+
+    case "game.event": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before sending event", message.requestId);
+        return;
+      }
+
+      const room = roomManager.getRoomById(message.payload.roomId);
+      if (!room || !room.players.has(connection.playerId)) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in the specified room", message.requestId);
+        return;
+      }
+
+      if (room.status !== "in-progress" || !room.gameState) {
+        connection.sendError("GAME_NOT_IN_PROGRESS", "Game is not currently active", message.requestId);
+        return;
+      }
+
+      const adapter = gameRegistry.get(room.gameId);
+      if (!adapter) {
+        connection.sendError("INTERNAL_ERROR", `No game adapter registered for ${room.gameId}`, message.requestId);
+        return;
+      }
+
+      const action = {
+        type: "EVENT",
+        event: message.payload.event,
+        data: message.payload.data,
+      };
+
+      const validation = adapter.validateAction(
+        room.gameState,
+        action,
+        connection.playerId
+      );
+
+      if (!validation.valid) {
+        connection.sendError("INVALID_MOVE", validation.error ?? "Invalid event", message.requestId);
+        return;
+      }
+
+      const actionResult = adapter.applyAction(
+        room.gameState,
+        action,
+        connection.playerId
+      );
+
+      room.gameState = actionResult.nextState;
+      const nextState = actionResult.nextState as { status?: string };
+      if (nextState.status === "won" || nextState.status === "draw") {
+        room.status = "completed";
       }
 
       room.incrementVersion();

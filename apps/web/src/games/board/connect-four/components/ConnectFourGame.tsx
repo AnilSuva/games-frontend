@@ -18,9 +18,11 @@ import {
 } from "../logic/dropPhysics";
 import type { Player } from "../logic/types";
 import { createResultSoundGuard, getResultSound } from "@/games/common/resultSound";
+import { useOnlineConnectFour } from "@/platform/multiplayer/useOnlineConnectFour";
+import { OnlineMatchLobby } from "@/components/game-ui/OnlineMatchLobby";
 
 interface SessionConfig {
-  mode: "1v1" | "vs-bot";
+  mode: "1v1" | "vs-bot" | "online";
   difficulty: BotDifficulty;
 }
 
@@ -48,10 +50,9 @@ const CONNECT_FOUR_MODES: GameModeOption[] = [
     },
   },
   {
-    id: "multiplayer",
-    label: "Multiplayer",
-    disabled: true,
-    disabledBadge: "Coming Soon",
+    id: "online",
+    label: "Online",
+    description: "Play with a Friend",
   },
 ];
 
@@ -97,6 +98,11 @@ export default function ConnectFourGame({
   const botAbortControllerRef = useRef<AbortController | null>(null);
   const columnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const resultSoundGuardRef = useRef(createResultSoundGuard());
+  const onlineResultSoundGuardRef = useRef(createResultSoundGuard());
+
+  // Online multiplayer integration
+  const online = useOnlineConnectFour();
+  const lastProcessedMoveCountRef = useRef<number>(0);
 
   /**
    * Cancels any in-flight bot request and animation frame, and clears the
@@ -155,21 +161,121 @@ export default function ConnectFourGame({
 
   const isGameOver = state.status === "won" || state.status === "draw";
 
+  const isOnlineGameOver =
+    sessionConfig.mode === "online" &&
+    (online.gameState?.status === "won" || online.gameState?.status === "draw");
+
   useEffect(() => {
-    if (!isGameOver) return;
+    const gameOver = sessionConfig.mode === "online" ? isOnlineGameOver : isGameOver;
+    if (!gameOver) return;
     const timer = setTimeout(() => {
       setShowResultPopup(true);
     }, 1200);
     return () => clearTimeout(timer);
-  }, [isGameOver]);
+  }, [isGameOver, isOnlineGameOver, sessionConfig.mode]);
 
   useEffect(() => {
-    if (inModeSelection || isGameOver) {
+    if (inModeSelection) {
       onTurnChange?.(null);
-    } else {
-      onTurnChange?.(state.currentPlayer === "R" ? "X" : "O");
+      return;
     }
-  }, [inModeSelection, isGameOver, state.currentPlayer, onTurnChange]);
+
+    if (sessionConfig.mode === "online") {
+      if (online.gameState && online.connectionState === "in_game" && !isOnlineGameOver) {
+        onTurnChange?.(online.gameState.currentPlayer === "R" ? "X" : "O");
+      } else {
+        onTurnChange?.(null);
+      }
+    } else {
+      if (isGameOver) {
+        onTurnChange?.(null);
+      } else {
+        onTurnChange?.(state.currentPlayer === "R" ? "X" : "O");
+      }
+    }
+  }, [
+    inModeSelection,
+    isGameOver,
+    isOnlineGameOver,
+    state.currentPlayer,
+    sessionConfig.mode,
+    online.gameState,
+    online.connectionState,
+    onTurnChange,
+  ]);
+
+  // Online move observer: triggers drop animation when server broadcasts a move
+  useEffect(() => {
+    if (sessionConfig.mode !== "online" || !online.gameState) {
+      lastProcessedMoveCountRef.current = 0;
+      return;
+    }
+
+    const currentMoveCount = online.gameState.moveCount;
+    if (currentMoveCount > lastProcessedMoveCountRef.current) {
+      lastProcessedMoveCountRef.current = currentMoveCount;
+      const lastMove = online.gameState.lastMove;
+      if (lastMove) {
+        const col = lastMove.column;
+        const targetRow = lastMove.row;
+        const player = lastMove.player;
+
+        isDropActiveRef.current = true;
+        soundManager.play("dropBall");
+
+        const colEl = columnRefs.current[col];
+        const columnHeight = colEl?.clientHeight ?? 300;
+        const cellDiameter =
+          colEl?.firstElementChild?.clientHeight ?? Math.round(columnHeight / 7);
+
+        const { startY, getTargetY } = calculateRowGeometry(columnHeight, cellDiameter);
+        const targetY = getTargetY(targetRow);
+
+        setDropStartY(startY);
+        setActiveDrop({
+          column: col,
+          targetRow,
+          player,
+          targetY,
+          startY,
+        });
+      }
+    }
+  }, [sessionConfig.mode, online.gameState]);
+
+  // Online result sound observer
+  useEffect(() => {
+    if (sessionConfig.mode !== "online" || !online.gameState) return;
+
+    if (online.gameState.status === "won" || online.gameState.status === "draw") {
+      const soundType = online.isWinner ? "victory" : online.isLoser ? "lose" : null;
+      const claimed = onlineResultSoundGuardRef.current.claim(soundType);
+      if (claimed === "victory") soundManager.playVictory();
+      if (claimed === "lose") soundManager.playLose();
+
+      onLifecycleChange?.("finished");
+      const score = online.isDraw ? 50 : online.isWinner ? 100 : 0;
+      onScoreUpdate?.(score);
+      onGameOver?.({
+        winner: online.winnerDisc === "R" ? "Orange" : online.winnerDisc === "Y" ? "Blue" : "Draw",
+        score,
+        details: {
+          mode: "online",
+          winnerDisc: online.winnerDisc,
+        },
+      });
+    }
+  }, [
+    sessionConfig.mode,
+    online.gameState,
+    online.isWinner,
+    online.isLoser,
+    online.isDraw,
+    online.winnerDisc,
+    onLifecycleChange,
+    onScoreUpdate,
+    onGameOver,
+  ]);
 
   const executeMove = useCallback(
     (col: number) => {
@@ -235,7 +341,9 @@ export default function ConnectFourGame({
         animFrameIdRef.current = null;
         isDropActiveRef.current = false;
         setActiveDrop(null);
-        dispatch({ type: "DROP", column: completedCol });
+        if (sessionConfig.mode !== "online") {
+          dispatch({ type: "DROP", column: completedCol });
+        }
       }
     };
 
@@ -248,9 +356,13 @@ export default function ConnectFourGame({
       }
       isDropActiveRef.current = false;
     };
-  }, [activeDrop]);
+  }, [activeDrop, sessionConfig.mode]);
 
   const startFreshMatch = useCallback(() => {
+    if (sessionConfig.mode === "online") {
+      online.requestRematch();
+      return;
+    }
     cleanupActiveSession();
     resultSoundGuardRef.current.reset();
 
@@ -262,14 +374,23 @@ export default function ConnectFourGame({
     setIsPopupDismissed(false);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
-  }, [cleanupActiveSession, onLifecycleChange, onScoreUpdate]);
+  }, [cleanupActiveSession, online, sessionConfig.mode, onLifecycleChange, onScoreUpdate]);
 
   const handleSelectMode = useCallback(
     (modeId: string) => {
       cleanupActiveSession();
       resultSoundGuardRef.current.reset();
+      onlineResultSoundGuardRef.current.reset();
 
-      // Only 1v1 is a direct-select mode; bot flows through handleSelectConfiguredMode
+      if (modeId === "online") {
+        setSessionConfig({ mode: "online", difficulty: "medium" });
+        setInModeSelection(false);
+        setShowResultPopup(false);
+        setIsPopupDismissed(false);
+        online.connect();
+        return;
+      }
+
       if (modeId === "1v1") {
         setSessionConfig({ mode: "1v1", difficulty: "medium" });
       }
@@ -282,13 +403,14 @@ export default function ConnectFourGame({
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
     },
-    [cleanupActiveSession, onLifecycleChange, onScoreUpdate]
+    [cleanupActiveSession, online, onLifecycleChange, onScoreUpdate]
   );
 
   const handleSelectConfiguredMode = useCallback(
     (_modeId: string, configValue: string) => {
       cleanupActiveSession();
       resultSoundGuardRef.current.reset();
+      onlineResultSoundGuardRef.current.reset();
 
       setSessionConfig({
         mode: "vs-bot",
@@ -308,9 +430,23 @@ export default function ConnectFourGame({
 
   const handleReturnToModes = useCallback(() => {
     cleanupActiveSession();
+    onlineResultSoundGuardRef.current.reset();
+    resultSoundGuardRef.current.reset();
+    if (sessionConfig.mode === "online") {
+      online.leaveRoom();
+    }
+    setSessionConfig({ mode: "1v1", difficulty: "medium" });
     setInModeSelection(true);
+    setShowResultPopup(false);
+    setIsPopupDismissed(false);
     onLifecycleChange?.("pre-game");
-  }, [cleanupActiveSession, onLifecycleChange]);
+    onTurnChange?.(null);
+  }, [cleanupActiveSession, online, sessionConfig.mode, onLifecycleChange, onTurnChange]);
+
+  const handleHomeExit = useCallback(() => {
+    online.disconnect();
+    handleReturnToModes();
+  }, [online, handleReturnToModes]);
 
   useEffect(() => {
     const controller: IGameController = {
@@ -322,7 +458,10 @@ export default function ConnectFourGame({
     };
   }, [startFreshMatch, onReady]);
 
+  // Local/Bot result sound observer
   useEffect(() => {
+    if (sessionConfig.mode === "online") return;
+
     if (state.status === "won" || state.status === "draw") {
       const resultSound = resultSoundGuardRef.current.claim(
         getResultSound({
@@ -394,11 +533,23 @@ export default function ConnectFourGame({
   ]);
 
   const handleColumnClick = (column: number) => {
-    if (inModeSelection || isGameOver || isDropActiveRef.current) return;
+    if (inModeSelection || isDropActiveRef.current) return;
+
+    if (sessionConfig.mode === "online") {
+      if (!online.isMyTurn || online.isMatchPaused || isOnlineGameOver) return;
+      const count = online.gameState?.columnCounts[column] ?? 0;
+      if (count >= 6) return;
+      soundManager.play("buttonClick");
+      online.sendMove(column);
+      return;
+    }
+
+    if (isGameOver) return;
     if (sessionConfig.mode === "vs-bot" && state.currentPlayer === "Y") return;
     executeMove(column);
   };
 
+  // ── Mode selection overlay ──────────────────────────────────────────────────
   if (inModeSelection) {
     return (
       <GameModeSelector
@@ -414,29 +565,127 @@ export default function ConnectFourGame({
     );
   }
 
-  const winningIndices = state.winningLine ? new Set(state.winningLine.line) : null;
+  // ── Online Lobby (Waiting / Join / Create) ──────────────────────────────────
+  if (
+    sessionConfig.mode === "online" &&
+    online.connectionState !== "in_game" &&
+    online.connectionState !== "game_over"
+  ) {
+    return (
+      <OnlineMatchLobby
+        gameTitle="Connect Four"
+        connectionState={online.connectionState}
+        room={online.room}
+        errorMessage={online.errorMessage}
+        onCreateRoom={online.createRoom}
+        onJoinRoom={online.joinRoom}
+        onLeaveRoom={online.leaveRoom}
+        onReturnToModes={handleReturnToModes}
+      />
+    );
+  }
 
-  const resultMessage =
-    state.status === "won"
-      ? state.winner === "R"
+  // ── Active Match Rendering ──────────────────────────────────────────────────
+  const isOnline = sessionConfig.mode === "online";
+  const currentBoard = isOnline ? online.gameState?.board ?? Array(42).fill(null) : state.board;
+  const currentColumnCounts = isOnline
+    ? online.gameState?.columnCounts ?? [0, 0, 0, 0, 0, 0, 0]
+    : state.columnCounts;
+  const currentStatus = isOnline ? online.gameState?.status ?? "waiting" : state.status;
+  const currentWinner = isOnline ? online.winnerDisc : state.winner;
+  const currentWinningLine = isOnline ? online.gameState?.winningLine : state.winningLine;
+  const matchOver = isOnline ? isOnlineGameOver : isGameOver;
+
+  const winningIndices = currentWinningLine ? new Set(currentWinningLine.line) : null;
+
+  const resultMessage = isOnline
+    ? currentStatus === "won"
+      ? online.isWinner
+        ? "You won!"
+        : online.isLoser
+        ? "Opponent won"
+        : currentWinner === "R"
         ? "Orange won"
         : "Blue won"
-      : "Draw";
+      : "Draw"
+    : state.status === "won"
+    ? state.winner === "R"
+      ? "Orange won"
+      : "Blue won"
+    : "Draw";
 
-  const resultAccent =
-    state.status === "draw"
+  const resultAccent = isOnline
+    ? currentStatus === "draw"
       ? null
-      : state.winner === "R"
-        ? "#e0530a"
-        : "#2563eb";
+      : currentWinner === "R"
+      ? "#e0530a"
+      : "#2563eb"
+    : state.status === "draw"
+    ? null
+    : state.winner === "R"
+    ? "#e0530a"
+    : "#2563eb";
 
   return (
     <div className="flex flex-col items-center w-full gap-4 p-2 select-none">
       <div className="sr-only" role="status" aria-live="polite">
-        {isGameOver
+        {matchOver
           ? resultMessage
+          : isOnline
+          ? `Player ${online.gameState?.currentPlayer === "R" ? "1 (Orange)" : "2 (Blue)"}'s turn`
           : `Player ${state.currentPlayer === "R" ? "1 (Orange)" : "2 (Blue)"}'s turn`}
       </div>
+
+      {/* Online Match Header */}
+      {isOnline && (
+        <div className="w-full max-w-[360px] sm:max-w-[420px] flex items-center justify-between px-1 text-xs">
+          <div className="flex items-center gap-1.5 font-medium text-[#1c1917]">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                online.myDisc === "R" ? "bg-[#e0530a]" : "bg-[#2563eb]"
+              }`}
+            />
+            <span>You: {online.myDisc === "R" ? "Orange" : "Blue"}</span>
+          </div>
+
+          <div>
+            {!online.isOpponentConnected ? (
+              <span className="text-[11px] text-[#e0530a] font-medium animate-pulse">
+                Opponent disconnected
+              </span>
+            ) : online.gameState?.status === "in_progress" ? (
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                  online.isMyTurn
+                    ? "bg-[#fef3c7] text-[#92400e]"
+                    : "bg-[#f3f4f6] text-[#6b7280]"
+                }`}
+              >
+                {online.isMyTurn ? "Your Turn" : "Opponent's Turn"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Opponent Disconnected 30-Second Forfeit Countdown Banner */}
+      {isOnline && online.disconnectGraceSecondsRemaining !== null && !isOnlineGameOver && (
+        <div className="w-full max-w-[360px] sm:max-w-[420px] px-3 py-2 bg-[#fff7ed] border border-[#fed7aa] rounded-xl flex items-center justify-between text-xs text-[#c2410c] shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ea580c] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ea580c]" />
+            </span>
+            <div className="flex flex-col text-left">
+              <span className="font-semibold text-[#9a3412]">Opponent disconnected</span>
+              <span className="text-[11px] text-[#c2410c]">Waiting for reconnect...</span>
+            </div>
+          </div>
+          <div className="font-mono text-xs font-bold tracking-wider text-[#ea580c] bg-white px-2 py-1 rounded-lg border border-[#fed7aa] shadow-2xs">
+            00:{String(online.disconnectGraceSecondsRemaining).padStart(2, "0")}
+          </div>
+        </div>
+      )}
 
       <div className="active-board-connect relative">
         {/* Layer 1: Base board with interactive buttons and static discs (z-0) */}
@@ -447,12 +696,17 @@ export default function ConnectFourGame({
         >
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2 h-full">
             {Array.from({ length: 7 }).map((_, col) => {
-              const count = state.columnCounts[col];
+              const count = currentColumnCounts[col];
               const isColFull = count >= 6;
-              const isDisabled =
-                state.status !== "in_progress" ||
-                (sessionConfig.mode === "vs-bot" && state.currentPlayer === "Y") ||
-                isColFull;
+              const isDisabled = isOnline
+                ? currentStatus !== "in_progress" ||
+                  !online.isMyTurn ||
+                  !online.isOpponentConnected ||
+                  online.isMatchPaused ||
+                  isColFull
+                : state.status !== "in_progress" ||
+                  (sessionConfig.mode === "vs-bot" && state.currentPlayer === "Y") ||
+                  isColFull;
 
               return (
                 <button
@@ -473,7 +727,12 @@ export default function ConnectFourGame({
                 >
                   {Array.from({ length: 6 }).map((_, row) => {
                     const idx = row * 7 + col;
-                    const value = state.board[idx];
+                    const isDroppingCell =
+                      isOnline &&
+                      activeDrop &&
+                      activeDrop.column === col &&
+                      activeDrop.targetRow === row;
+                    const value = isDroppingCell ? null : currentBoard[idx];
                     const isWinningCell = winningIndices?.has(idx) ?? false;
 
                     return (
@@ -528,9 +787,10 @@ export default function ConnectFourGame({
             {Array.from({ length: 7 }).map((_, col) => {
               const isColHovered =
                 hoveredCol === col &&
-                state.status === "in_progress" &&
-                !(sessionConfig.mode === "vs-bot" && state.currentPlayer === "Y") &&
-                state.columnCounts[col] < 6 &&
+                (isOnline
+                  ? currentStatus === "in_progress" && online.isMyTurn && !online.isMatchPaused
+                  : state.status === "in_progress" && !(sessionConfig.mode === "vs-bot" && state.currentPlayer === "Y")) &&
+                currentColumnCounts[col] < 6 &&
                 !activeDrop;
 
               const isColFocused = focusedCol === col;
@@ -571,25 +831,87 @@ export default function ConnectFourGame({
         </div>
 
         {/* Winning line (z-30) */}
-        {state.winningLine && (
+        {currentWinningLine && (
           <WinningLine
-            winningLine={state.winningLine}
-            winner={state.winner}
+            winningLine={currentWinningLine}
+            winner={currentWinner}
           />
         )}
 
-        {isGameOver && showResultPopup && !isPopupDismissed && (
+        {/* Result Popup - Appears after delay */}
+        {matchOver && showResultPopup && !isPopupDismissed && (
           <GameResultPopup
             resultText={resultMessage}
             accentColor={resultAccent}
             onClose={() => setIsPopupDismissed(true)}
-            onPlayAgain={startFreshMatch}
+            onPlayAgain={() => {
+              soundManager.play("buttonClick");
+              startFreshMatch();
+            }}
+            onHome={isOnline ? handleHomeExit : undefined}
+            playAgainText={
+              isOnline
+                ? online.hasRequestedRematch
+                  ? "Waiting for opponent..."
+                  : online.opponentRequestedRematch
+                  ? "Accept Rematch"
+                  : "Play Again"
+                : "Play Again"
+            }
           />
         )}
       </div>
 
-      <div className="w-full max-w-[360px] sm:max-w-[400px] flex items-center justify-between px-1 min-h-[32px]">
-        {!isGameOver ? (
+      {/* Bottom Actions Area */}
+      <div className="w-full max-w-[360px] sm:max-w-[420px] flex items-center justify-between px-1 min-h-[32px]">
+        {isOnline ? (
+          !isOnlineGameOver ? (
+            <div className="w-full flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  handleReturnToModes();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                ← Leave Room
+              </button>
+
+              <span className="text-[11px] font-mono text-[#9c978e]">
+                Room: {online.room?.roomCode}
+              </span>
+            </div>
+          ) : isPopupDismissed ? (
+            <div className="w-full flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  handleReturnToModes();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                ← Leave Room
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  online.requestRematch();
+                }}
+                className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              >
+                {online.hasRequestedRematch
+                  ? "Waiting for opponent..."
+                  : online.opponentRequestedRematch
+                  ? "Accept Rematch"
+                  : "Play Again"}
+              </button>
+            </div>
+          ) : null
+        ) : !isGameOver ? (
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"

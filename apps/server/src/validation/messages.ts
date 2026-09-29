@@ -4,6 +4,8 @@ import type {
   ClientEnvelope,
   ClientPingPayload,
   ErrorCode,
+  GameEventPayload,
+  GameInputPayload,
   GameMovePayload,
   GameRematchPayload,
   RoomCreatePayload,
@@ -44,13 +46,33 @@ export const clientPingSchema = z.object({
   clientTime: z.number().optional(),
 });
 
-export const gameMoveSchema = z.object({
-  roomId: z.string().min(1).max(64),
-  position: z.number().int().min(0).max(8),
-});
+export const gameMoveSchema = z
+  .object({
+    roomId: z.string().min(1).max(64),
+    position: z.number().int().min(0).max(8).optional(),
+    column: z.number().int().min(0).max(6).optional(),
+  })
+  .refine(
+    (data) => data.position !== undefined || data.column !== undefined,
+    {
+      message: "Either position or column must be provided",
+    }
+  );
 
 export const gameRematchSchema = z.object({
   roomId: z.string().min(1).max(64),
+});
+
+export const gameInputSchema = z.object({
+  roomId: z.string().min(1).max(64),
+  input: z.string().min(1).max(64),
+  data: z.unknown().optional(),
+});
+
+export const gameEventSchema = z.object({
+  roomId: z.string().min(1).max(64),
+  event: z.string().min(1).max(64),
+  data: z.unknown().optional(),
 });
 
 const baseEnvelopeSchema = z.object({
@@ -64,6 +86,8 @@ const baseEnvelopeSchema = z.object({
     "ping",
     "game.move",
     "game.rematch",
+    "game.input",
+    "game.event",
   ]),
   requestId: z.string().min(1).max(64),
   payload: z.unknown().default({}),
@@ -77,7 +101,9 @@ export type ValidatedClientMessage =
   | (ClientEnvelope<RoomReconnectPayload> & { type: "room.reconnect" })
   | (ClientEnvelope<ClientPingPayload> & { type: "ping" })
   | (ClientEnvelope<GameMovePayload> & { type: "game.move" })
-  | (ClientEnvelope<GameRematchPayload> & { type: "game.rematch" });
+  | (ClientEnvelope<GameRematchPayload> & { type: "game.rematch" })
+  | (ClientEnvelope<GameInputPayload> & { type: "game.input" })
+  | (ClientEnvelope<GameEventPayload> & { type: "game.event" });
 
 export type ParseResult =
   | { success: true; message: ValidatedClientMessage }
@@ -326,6 +352,48 @@ export function parseClientMessage(
         message: {
           version: PROTOCOL_VERSION,
           type: "game.rematch",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "game.input": {
+      const res = gameInputSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid game.input payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: "game.input",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "game.event": {
+      const res = gameEventSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid game.event payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: "game.event",
           requestId: envelope.requestId,
           payload: res.data,
         },

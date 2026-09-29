@@ -49,7 +49,9 @@ export type ClientMessageType =
   | "room.reconnect"
   | "ping"
   | "game.move"
-  | "game.rematch";
+  | "game.rematch"
+  | "game.input"
+  | "game.event";
 
 export type ServerMessageType =
   | "session.ready"
@@ -59,7 +61,8 @@ export type ServerMessageType =
   | "room.left"
   | "room.error"
   | "server.pong"
-  | "game.state";
+  | "game.state"
+  | "game.event";
 
 export interface ClientEnvelope<T = unknown> {
   version: 1;
@@ -107,11 +110,24 @@ export interface ClientPingPayload {
 
 export interface GameMovePayload {
   roomId: string;
-  position: number;
+  position?: number;
+  column?: number;
 }
 
 export interface GameRematchPayload {
   roomId: string;
+}
+
+export interface GameInputPayload {
+  roomId: string;
+  input: string;
+  data?: unknown;
+}
+
+export interface GameEventPayload {
+  roomId: string;
+  event: string;
+  data?: unknown;
 }
 
 // Server payloads

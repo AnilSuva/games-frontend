@@ -22,10 +22,18 @@ export function getMultiplayerWsUrl(): string {
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
       hostname === "0.0.0.0" ||
-      hostname === "";
-    if (!isLocal) {
-      return DEFAULT_PROD_WS_URL;
+      hostname === "" ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+
+    if (isLocal) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = hostname || "localhost";
+      return `${protocol}//${host}:3001/ws`;
     }
+
+    return DEFAULT_PROD_WS_URL;
   }
 
   return DEFAULT_LOCAL_WS_URL;

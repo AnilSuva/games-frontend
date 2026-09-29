@@ -1,3 +1,4 @@
+import os from "node:os";
 import {
   DISCONNECT_GRACE_PERIOD_MS,
   HEARTBEAT_INTERVAL_MS,
@@ -17,10 +18,29 @@ export interface ServerConfig {
   rateLimitRefillPerSec: number;
 }
 
+function getLocalNetworkOrigins(): string[] {
+  const origins: string[] = ["http://172.30.208.1:3000"];
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] ?? []) {
+        if (net.family === "IPv4" && !net.internal) {
+          origins.push(`http://${net.address}:3000`);
+        }
+      }
+    }
+  } catch {
+    // Ignore network interface enumeration failures
+  }
+  return Array.from(new Set(origins));
+}
+
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "http://172.30.208.1:3000",
   "https://games.anilsuva.com",
+  ...getLocalNetworkOrigins(),
 ];
 
 function parseOrigins(rawOrigins?: string): string[] {
@@ -35,6 +55,11 @@ function parseOrigins(rawOrigins?: string): string[] {
   // Guarantee production frontend origin is always allowed
   if (!origins.some((o) => o.toLowerCase() === "https://games.anilsuva.com")) {
     origins.push("https://games.anilsuva.com");
+  }
+  for (const localOrigin of getLocalNetworkOrigins()) {
+    if (!origins.includes(localOrigin)) {
+      origins.push(localOrigin);
+    }
   }
   return origins;
 }

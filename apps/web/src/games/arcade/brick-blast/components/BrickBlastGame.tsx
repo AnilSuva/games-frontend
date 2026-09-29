@@ -8,6 +8,8 @@ import { consumeStartingPlayer, type PlatformPlayer } from "@/games/common/start
 import { soundManager } from "@/platform/audio";
 import { GAME_WIDTH, GAME_HEIGHT } from "../config/balance";
 import { createResultSoundGuard, getResultSound } from "@/games/common/resultSound";
+import { useOnlineBrickBlast } from "@/platform/multiplayer/useOnlineBrickBlast";
+import { OnlineMatchLobby } from "@/components/game-ui/OnlineMatchLobby";
 
 const BRICK_BLAST_MODES: GameModeOption[] = [
   { id: "1v1", label: "1v1", description: "Local 2-Player" },
@@ -24,10 +26,9 @@ const BRICK_BLAST_MODES: GameModeOption[] = [
     },
   },
   {
-    id: "multiplayer",
-    label: "Multiplayer",
-    disabled: true,
-    disabledBadge: "Coming Soon",
+    id: "online",
+    label: "Online",
+    description: "Play with a Friend",
   },
 ];
 
@@ -45,6 +46,8 @@ const PLAYER_COLOR_FOOTER = (
   </div>
 );
 
+type BrickBlastGameMode = "1v1" | "vs-bot" | "online";
+
 export default function BrickBlastGame({
   onGameOver,
   onScoreUpdate,
@@ -56,16 +59,19 @@ export default function BrickBlastGame({
   const phaserGameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<import("../game/BrickBlastScene").BrickBlastScene | null>(null);
   const resultSoundGuardRef = useRef(createResultSoundGuard());
+  const onlineResultSoundGuardRef = useRef(createResultSoundGuard());
 
   const [inModeSelection, setInModeSelection] = useState<boolean>(true);
-  const [selectedMode, setSelectedMode] = useState<"1v1" | "vs-bot">("1v1");
+  const [selectedMode, setSelectedMode] = useState<BrickBlastGameMode>("1v1");
   const [botDifficulty, setBotDifficulty] = useState<"easy" | "medium" | "hard">("medium");
-  const [showResultPopup, setShowResultPopup] = useState<boolean>(false);
   const [isPopupDismissed, setIsPopupDismissed] = useState<boolean>(false);
   const [gameOverResult, setGameOverResult] = useState<{
     winner: PlatformPlayer;
     score: number;
   } | null>(null);
+
+  // Online multiplayer integration
+  const online = useOnlineBrickBlast();
 
   useEffect(() => {
     onLifecycleChange?.("pre-game");
@@ -78,12 +84,157 @@ export default function BrickBlastGame({
 
   const handleSelectMode = useCallback(
     (modeId: string) => {
-      // Only "1v1" is a direct-select mode; "bot" flows through handleSelectConfiguredMode.
-      if (modeId !== "1v1") return;
+      if (modeId === "1v1") {
+        resultSoundGuardRef.current.reset();
+        setSelectedMode("1v1");
+        setInModeSelection(false);
+        setIsPopupDismissed(false);
+        setGameOverResult(null);
+        onLifecycleChange?.("playing");
+        onScoreUpdate?.(0);
+      } else if (modeId === "online") {
+        resultSoundGuardRef.current.reset();
+        onlineResultSoundGuardRef.current.reset();
+        setSelectedMode("online");
+        setInModeSelection(false);
+        setIsPopupDismissed(false);
+        setGameOverResult(null);
+      }
+    },
+    [onLifecycleChange, onScoreUpdate]
+  );
+
+  const handleReturnToModes = useCallback(() => {
+    resultSoundGuardRef.current.reset();
+    onlineResultSoundGuardRef.current.reset();
+    if (selectedMode === "online") {
+      online.leaveRoom();
+    }
+    if (phaserGameRef.current) {
+      phaserGameRef.current.destroy(true);
+      phaserGameRef.current = null;
+    }
+    sceneRef.current = null;
+    setSelectedMode("1v1");
+    setInModeSelection(true);
+    setIsPopupDismissed(false);
+    setGameOverResult(null);
+    onLifecycleChange?.("pre-game");
+    onTurnChange?.(null);
+  }, [onLifecycleChange, onTurnChange, online, selectedMode]);
+
+  // Handle online rematch start
+  const prevOnlineStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedMode !== "online") return;
+    const currentStatus = online.gameState?.status;
+    const prevStatus = prevOnlineStatusRef.current;
+    prevOnlineStatusRef.current = currentStatus ?? null;
+
+    if (prevStatus === "won" && currentStatus === "in_progress") {
+      onlineResultSoundGuardRef.current.reset();
+      setIsPopupDismissed(false);
+      setGameOverResult(null);
+      const nextStarter = online.gameState?.startingPlayer || "orange";
+      sceneRef.current?.restartMatch(nextStarter, "online", undefined, {
+        sendInput: online.sendInput,
+        sendGameEvent: online.sendGameEvent,
+        myRole: online.myRole ?? "orange",
+      });
+      onLifecycleChange?.("playing");
+      onScoreUpdate?.(0);
+    }
+  }, [
+    selectedMode,
+    online.gameState?.status,
+    online.gameState?.startingPlayer,
+    online.sendInput,
+    online.sendGameEvent,
+    online.myRole,
+    onLifecycleChange,
+    onScoreUpdate,
+  ]);
+
+  // Handle online match pause/resume on disconnect
+  useEffect(() => {
+    if (selectedMode !== "online") return;
+    if (online.isMatchPaused) {
+      sceneRef.current?.pauseGame();
+    } else if (online.connectionState === "in_game") {
+      sceneRef.current?.resumeGame();
+    }
+  }, [selectedMode, online.isMatchPaused, online.connectionState]);
+
+  // Handle online game over sound and callback
+  useEffect(() => {
+    if (selectedMode !== "online" || !online.isGameOver) return;
+    const winner = online.gameState?.winner;
+
+    if (online.isWinner) {
+      if (onlineResultSoundGuardRef.current.claim("victory") === "victory") {
+        soundManager.playVictory();
+      }
+    } else if (online.isLoser) {
+      if (onlineResultSoundGuardRef.current.claim("lose") === "lose") {
+        soundManager.playLose();
+      }
+    }
+
+    if (winner) {
+      onGameOver({
+        winner: winner === "orange" ? "Orange" : "Blue",
+        score:
+          online.myRole === "orange"
+            ? online.gameState?.scores.orange ?? 0
+            : online.gameState?.scores.blue ?? 0,
+        details: {
+          winnerColor: winner,
+          mode: "online",
+          game: "brick-blast",
+          resultReason: online.gameState?.resultReason,
+        },
+      });
+    }
+  }, [
+    selectedMode,
+    online.isGameOver,
+    online.isWinner,
+    online.isLoser,
+    online.gameState?.winner,
+    online.gameState?.scores,
+    online.gameState?.resultReason,
+    online.myRole,
+    onGameOver,
+  ]);
+
+  // Stable ref to the current restart handler
+  const handleRestartRef = useRef<() => void>(() => {});
+
+  const handleRestart = useCallback(() => {
+    if (selectedMode === "online") {
+      online.requestRematch();
+      return;
+    }
+    const nextStarter = consumeStartingPlayer("brick-blast");
+    resultSoundGuardRef.current.reset();
+    setIsPopupDismissed(false);
+    setGameOverResult(null);
+    sceneRef.current?.restartMatch(nextStarter, selectedMode, botDifficulty);
+    onLifecycleChange?.("playing");
+    onScoreUpdate?.(0);
+  }, [botDifficulty, onLifecycleChange, onScoreUpdate, online, selectedMode]);
+
+  useEffect(() => {
+    handleRestartRef.current = handleRestart;
+  });
+
+  const handleSelectConfiguredMode = useCallback(
+    (modeId: string, value: string) => {
+      if (modeId !== "bot") return;
       resultSoundGuardRef.current.reset();
-      setSelectedMode("1v1");
+      setSelectedMode("vs-bot");
+      setBotDifficulty(value === "easy" || value === "hard" ? value : "medium");
       setInModeSelection(false);
-      setShowResultPopup(false);
       setIsPopupDismissed(false);
       setGameOverResult(null);
       onLifecycleChange?.("playing");
@@ -92,58 +243,14 @@ export default function BrickBlastGame({
     [onLifecycleChange, onScoreUpdate]
   );
 
-  const handleReturnToModes = useCallback(() => {
-    resultSoundGuardRef.current.reset();
-    if (phaserGameRef.current) {
-      phaserGameRef.current.destroy(true);
-      phaserGameRef.current = null;
-    }
-    sceneRef.current = null;
-    setSelectedMode("1v1");
-    setInModeSelection(true);
-    setShowResultPopup(false);
-    setIsPopupDismissed(false);
-    setGameOverResult(null);
-    onLifecycleChange?.("pre-game");
-    onTurnChange?.(null);
-  }, [onLifecycleChange, onTurnChange]);
+  // Phaser Game instance lifecycle: mounted strictly when in an active game
+  const isOnlineLobby =
+    selectedMode === "online" &&
+    online.connectionState !== "in_game" &&
+    online.connectionState !== "game_over";
 
-  // Stable ref to the current restart handler — passed to the Phaser controller
-  // so the controller object never becomes stale without triggering Phaser re-init.
-  const handleRestartRef = useRef<() => void>(() => {});
-
-  const handleRestart = useCallback(() => {
-    const nextStarter = consumeStartingPlayer("brick-blast");
-    resultSoundGuardRef.current.reset();
-    setShowResultPopup(false);
-    setIsPopupDismissed(false);
-    setGameOverResult(null);
-    sceneRef.current?.restartMatch(nextStarter, selectedMode, botDifficulty);
-    onLifecycleChange?.("playing");
-    onScoreUpdate?.(0);
-  }, [botDifficulty, onLifecycleChange, onScoreUpdate, selectedMode]);
-
-  // Keep the ref in sync with the latest handler outside of render
   useEffect(() => {
-    handleRestartRef.current = handleRestart;
-  });
-
-  const handleSelectConfiguredMode = useCallback((modeId: string, value: string) => {
-    if (modeId !== "bot") return;
-    resultSoundGuardRef.current.reset();
-    setSelectedMode("vs-bot");
-    setBotDifficulty(value === "easy" || value === "hard" ? value : "medium");
-    setInModeSelection(false);
-    setShowResultPopup(false);
-    setIsPopupDismissed(false);
-    setGameOverResult(null);
-    onLifecycleChange?.("playing");
-    onScoreUpdate?.(0);
-  }, [onLifecycleChange, onScoreUpdate]);
-
-  // Phaser Game instance lifecycle: mounted strictly when NOT in mode selection
-  useEffect(() => {
-    if (inModeSelection) return;
+    if (inModeSelection || isOnlineLobby) return;
 
     let isMounted = true;
     let gameInstance: Phaser.Game | null = null;
@@ -154,7 +261,10 @@ export default function BrickBlastGame({
       const Phaser = (await import("phaser")).default;
       const { BrickBlastScene } = await import("../game/BrickBlastScene");
 
-      const startingPlayer = consumeStartingPlayer("brick-blast");
+      const startingPlayer =
+        selectedMode === "online"
+          ? online.gameState?.startingPlayer || "orange"
+          : consumeStartingPlayer("brick-blast");
 
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
@@ -182,6 +292,14 @@ export default function BrickBlastGame({
           startingPlayer,
           mode: selectedMode,
           difficulty: botDifficulty,
+          online:
+            selectedMode === "online"
+              ? {
+                  sendInput: online.sendInput,
+                  sendGameEvent: online.sendGameEvent,
+                  myRole: online.myRole ?? "orange",
+                }
+              : undefined,
           callbacks: {
             onScoreUpdate: (score: number) => {
               if (!isMounted) return;
@@ -192,33 +310,42 @@ export default function BrickBlastGame({
             },
             onGameOver: (result: { winner: PlatformPlayer; score: number }) => {
               if (!isMounted) return;
-              const resultSound = resultSoundGuardRef.current.claim(
-                getResultSound({
-                  mode: selectedMode,
-                  winner: result.winner,
-                  humanPlayer: "orange",
-                })
-              );
-              if (resultSound === "victory") soundManager.playVictory();
-              if (resultSound === "lose") soundManager.playLose();
 
-              setGameOverResult(result);
-              setShowResultPopup(true);
-              onGameOver({
-                winner: result.winner === "orange" ? "Orange" : "Blue",
-                score: result.score,
-                details: {
-                  winnerColor: result.winner,
-                  mode: selectedMode,
-                  game: "brick-blast",
-                },
-              });
+              if (selectedMode !== "online") {
+                const resultSound = resultSoundGuardRef.current.claim(
+                  getResultSound({
+                    mode: selectedMode,
+                    winner: result.winner,
+                    humanPlayer: "orange",
+                  })
+                );
+                if (resultSound === "victory") soundManager.playVictory();
+                if (resultSound === "lose") soundManager.playLose();
+
+                setGameOverResult(result);
+                onGameOver({
+                  winner: result.winner === "orange" ? "Orange" : "Blue",
+                  score: result.score,
+                  details: {
+                    winnerColor: result.winner,
+                    mode: selectedMode,
+                    game: "brick-blast",
+                  },
+                });
+              }
             },
             onLifecycleChange,
           },
         }) as import("../game/BrickBlastScene").BrickBlastScene;
 
         sceneRef.current = scene;
+
+        if (selectedMode === "online") {
+          online.setRemoteHandlers({
+            onRemoteInput: (data) => scene.handleRemoteInput(data),
+            onRemoteEvent: (data) => scene.handleRemoteEvent(data),
+          });
+        }
 
         const controller: IGameController = {
           restart: () => handleRestartRef.current(),
@@ -244,11 +371,19 @@ export default function BrickBlastGame({
       }
       sceneRef.current = null;
     };
-  // Phaser initializes once when the user starts a game session (inModeSelection → false).
-  // selectedMode and botDifficulty are captured at init time via the scene init data;
-  // subsequent restarts (via handleRestartRef) pass fresh values without re-creating Phaser.
-  }, [inModeSelection, onGameOver, onLifecycleChange, onReady, onScoreUpdate]);
+  }, [
+    inModeSelection,
+    isOnlineLobby,
+    selectedMode,
+    botDifficulty,
+    online,
+    onGameOver,
+    onLifecycleChange,
+    onReady,
+    onScoreUpdate,
+  ]);
 
+  // Mode Selection Overlay
   if (inModeSelection) {
     return (
       <GameModeSelector
@@ -264,25 +399,90 @@ export default function BrickBlastGame({
     );
   }
 
-  const isGameOver = Boolean(gameOverResult);
+  // Online Match Lobby
+  if (isOnlineLobby) {
+    return (
+      <OnlineMatchLobby
+        gameTitle="Brick Blast"
+        connectionState={online.connectionState}
+        room={online.room}
+        errorMessage={online.errorMessage}
+        onCreateRoom={online.createRoom}
+        onJoinRoom={online.joinRoom}
+        onLeaveRoom={online.leaveRoom}
+        onReturnToModes={handleReturnToModes}
+      />
+    );
+  }
 
-  const resultMessage =
-    gameOverResult?.winner === "orange"
-      ? "Orange won"
-      : gameOverResult?.winner === "blue"
-      ? "Blue won"
-      : "Match Over";
+  const isOnline = selectedMode === "online";
+  const isMatchOver = isOnline ? online.isGameOver : Boolean(gameOverResult);
 
-  const resultAccent =
-    gameOverResult?.winner === "orange"
+  const resultMessage = isOnline
+    ? online.isWinner
+      ? online.gameState?.resultReason === "disconnect_forfeit"
+        ? "Opponent forfeited • You won!"
+        : "You won!"
+      : online.isLoser
+      ? online.gameState?.resultReason === "disconnect_forfeit"
+        ? "Forfeited"
+        : "Opponent won"
+      : "Match Over"
+    : gameOverResult?.winner === "orange"
+    ? "Orange won"
+    : gameOverResult?.winner === "blue"
+    ? "Blue won"
+    : "Match Over";
+
+  const resultAccent = isOnline
+    ? online.gameState?.winner === "orange"
       ? "#e0530a"
-      : gameOverResult?.winner === "blue"
+      : online.gameState?.winner === "blue"
       ? "#2563eb"
-      : null;
+      : null
+    : gameOverResult?.winner === "orange"
+    ? "#e0530a"
+    : gameOverResult?.winner === "blue"
+    ? "#2563eb"
+    : null;
+
+  const rematchText = isOnline
+    ? online.hasRequestedRematch && !online.opponentRequestedRematch
+      ? "Waiting for opponent..."
+      : online.opponentRequestedRematch
+      ? "Accept Rematch"
+      : "Play Again"
+    : "Play Again";
 
   return (
     <div className="flex flex-col items-center w-full gap-2 select-none">
-      {/* 2-Player Arena Container (maximizes vertical mobile viewport, zero clutter) */}
+      {/* Online Status Bar */}
+      {isOnline && (
+        <div className="w-full max-w-[360px] flex items-center justify-between px-3 py-1.5 bg-white border border-[#e6e3dc] rounded-xl text-xs shadow-xs">
+          <div className="flex items-center gap-2 font-medium">
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                online.myRole === "orange" ? "bg-[#e0530a]" : "bg-[#2563eb]"
+              }`}
+            />
+            <span className="text-[#1c1917]">
+              You ({online.myRole === "orange" ? "Orange" : "Blue"})
+            </span>
+          </div>
+
+          {online.isMatchPaused && online.disconnectGraceSecondsRemaining !== null ? (
+            <span className="text-amber-600 font-semibold animate-pulse text-[11px]">
+              Opponent disconnected • Forfeit in {online.disconnectGraceSecondsRemaining}s
+            </span>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[#6b665f] text-[11px]">
+              <span>vs Opponent ({online.myRole === "orange" ? "Blue" : "Orange"})</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2-Player Arena Container */}
       <div className="active-board-brick relative aspect-[360/580] overflow-hidden bg-[#faf9f6]">
         <div
           ref={containerRef}
@@ -291,19 +491,32 @@ export default function BrickBlastGame({
           aria-label="Brick Blast 2-Player Game Arena"
         />
 
-        {showResultPopup && !isPopupDismissed && (
+        {isMatchOver && !isPopupDismissed && (
           <GameResultPopup
             resultText={resultMessage}
             accentColor={resultAccent}
+            playAgainText={rematchText}
             onClose={() => setIsPopupDismissed(true)}
-            onPlayAgain={handleRestart}
+            onPlayAgain={() => {
+              if (isOnline) {
+                soundManager.play("buttonClick");
+                online.requestRematch();
+              } else {
+                handleRestart();
+              }
+            }}
+            onHome={() => {
+              if (isOnline) {
+                online.leaveRoom();
+              }
+            }}
           />
         )}
       </div>
 
       {/* Minimal Bottom Control Bar: Modes & Reset */}
       <div className="w-full max-w-[380px] flex items-center justify-between px-1 min-h-[32px]">
-        {!isGameOver ? (
+        {!isMatchOver ? (
           <div className="w-full flex items-center justify-between text-xs">
             <button
               type="button"
@@ -316,16 +529,18 @@ export default function BrickBlastGame({
               ← Modes
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                soundManager.play("buttonClick");
-                handleRestart();
-              }}
-              className="px-3.5 py-1 text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] bg-white sm:hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] rounded-lg transition shadow-xs cursor-pointer"
-            >
-              Reset
-            </button>
+            {!isOnline && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  handleRestart();
+                }}
+                className="px-3.5 py-1 text-xs font-medium text-[#6b665f] sm:hover:text-[#1c1917] bg-white sm:hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] rounded-lg transition shadow-xs cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
           </div>
         ) : isPopupDismissed ? (
           <div className="w-full flex items-center justify-between text-xs">
@@ -344,11 +559,16 @@ export default function BrickBlastGame({
               type="button"
               onClick={() => {
                 soundManager.play("buttonClick");
-                handleRestart();
+                if (isOnline) {
+                  online.requestRematch();
+                } else {
+                  handleRestart();
+                }
               }}
-              className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
+              disabled={isOnline && online.hasRequestedRematch && !online.opponentRequestedRematch}
+              className="text-[11px] font-medium text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1 disabled:opacity-50"
             >
-              Play Again
+              {rematchText}
             </button>
           </div>
         ) : null}

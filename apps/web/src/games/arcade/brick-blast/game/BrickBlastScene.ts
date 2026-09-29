@@ -33,11 +33,18 @@ import type { PlatformPlayer } from "@/games/common/startingPlayer";
 import { soundManager } from "@/platform/audio";
 import { BrickBlastBotController } from "./botController";
 
+export interface OnlineNetworkingCallbacks {
+  sendInput?: (input: string, data?: unknown) => void;
+  sendGameEvent?: (event: string, data?: unknown) => void;
+  myRole?: PlatformPlayer;
+}
+
 export interface SceneInitData {
   startingPlayer: PlatformPlayer;
   callbacks: BrickBlastCallbacks;
-  mode?: "1v1" | "vs-bot";
+  mode?: "1v1" | "vs-bot" | "online";
   difficulty?: "easy" | "medium" | "hard";
+  online?: OnlineNetworkingCallbacks;
 }
 
 export class BrickBlastScene extends Phaser.Scene {
@@ -45,9 +52,16 @@ export class BrickBlastScene extends Phaser.Scene {
   private currentLevel = 1;
   private score = 0;
   private currentStarter: PlatformPlayer = "orange";
-  private mode: "1v1" | "vs-bot" = "1v1";
+  private mode: "1v1" | "vs-bot" | "online" = "1v1";
   private difficulty: "easy" | "medium" | "hard" = "medium";
   private botController: BrickBlastBotController | null = null;
+  private onlineConfig: OnlineNetworkingCallbacks | null = null;
+  private myRole: PlatformPlayer = "orange";
+  private opponentMoveIntent = 0;
+  private opponentTargetX: number | null = null;
+  private lastSentInput: string | null = null;
+  private lastSentPointerX = 0;
+  private lastPointerSendTime = 0;
 
   private orangePaddle!: Paddle;
   private bluePaddle!: Paddle;
@@ -123,6 +137,13 @@ export class BrickBlastScene extends Phaser.Scene {
     this.callbacks = data.callbacks || {};
     this.mode = data.mode || "1v1";
     this.difficulty = data.difficulty || "medium";
+    this.onlineConfig = data.online || null;
+    this.myRole = data.online?.myRole || "orange";
+    this.opponentMoveIntent = 0;
+    this.opponentTargetX = null;
+    this.lastSentInput = null;
+    this.lastSentPointerX = 0;
+    this.lastPointerSendTime = 0;
     this.botController = this.mode === "vs-bot" ? new BrickBlastBotController(this.difficulty) : null;
     this.currentLevel = 1;
     this.score = 0;
@@ -381,6 +402,20 @@ export class BrickBlastScene extends Phaser.Scene {
       GAME_WIDTH - PADDLE_WIDTH / 2
     );
 
+    if (this.mode === "online") {
+      const myTarget = this.myRole;
+      this.activePointers.set(e.pointerId, myTarget);
+      if (myTarget === "orange") {
+        this.orangePaddle.x = clampedX;
+        this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
+      } else {
+        this.bluePaddle.x = clampedX;
+        this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+      }
+      this.sendOnlinePaddlePosition(clampedX);
+      return;
+    }
+
     if (this.mode === "vs-bot") {
       this.activePointers.set(e.pointerId, "orange");
       this.orangePaddle.x = clampedX;
@@ -409,8 +444,10 @@ export class BrickBlastScene extends Phaser.Scene {
     const coords = this.getCanvasGameCoords(e);
     if (!coords) return;
 
-    // Fallback: assign if a touch began outside or entered with button held down
-    if (!target && e.buttons > 0) {
+    if (this.mode === "online") {
+      target = this.myRole;
+      this.activePointers.set(e.pointerId, target);
+    } else if (!target && e.buttons > 0) {
       target = this.mode === "vs-bot" || coords.y > GAME_HEIGHT / 2 ? "orange" : "blue";
       this.activePointers.set(e.pointerId, target);
     }
@@ -430,6 +467,10 @@ export class BrickBlastScene extends Phaser.Scene {
     } else if (target === "blue") {
       this.bluePaddle.x = clampedX;
       this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+    }
+
+    if (this.mode === "online") {
+      this.sendOnlinePaddlePosition(clampedX);
     }
   }
 
@@ -458,6 +499,8 @@ export class BrickBlastScene extends Phaser.Scene {
     // 2. AI Bot paddle update if in vs-bot mode
     if (this.mode === "vs-bot") {
       this.updateBotPaddle(dt);
+    } else if (this.mode === "online") {
+      this.updateRemoteOpponentPaddle(dt);
     }
 
     // 3. Update active balls
@@ -468,6 +511,36 @@ export class BrickBlastScene extends Phaser.Scene {
 
     // 5. Check level complete
     this.checkLevelCompletion();
+  }
+
+  private updateRemoteOpponentPaddle(dt: number) {
+    const oppPaddle = this.myRole === "orange" ? this.bluePaddle : this.orangePaddle;
+    const oppColor = this.myRole === "orange" ? COLOR_BLUE : COLOR_ORANGE;
+    let oppMoved = false;
+
+    if (this.opponentTargetX !== null) {
+      const dx = this.opponentTargetX - oppPaddle.x;
+      if (Math.abs(dx) > 1) {
+        oppPaddle.x += dx * Math.min(1, dt * 15);
+        oppMoved = true;
+      } else {
+        oppPaddle.x = this.opponentTargetX;
+        this.opponentTargetX = null;
+        oppMoved = true;
+      }
+    } else if (this.opponentMoveIntent !== 0) {
+      oppPaddle.x += this.opponentMoveIntent * PADDLE_KEYBOARD_SPEED * dt;
+      oppMoved = true;
+    }
+
+    if (oppMoved) {
+      oppPaddle.x = Phaser.Math.Clamp(
+        oppPaddle.x,
+        PADDLE_WIDTH / 2,
+        GAME_WIDTH - PADDLE_WIDTH / 2
+      );
+      this.renderPaddle(oppPaddle, oppColor);
+    }
   }
 
   private updateBotPaddle(dt: number) {
@@ -490,23 +563,68 @@ export class BrickBlastScene extends Phaser.Scene {
     let orangeMoved = false;
     let blueMoved = false;
 
-    // Orange (Bottom): A / D
-    if (this.keyA?.isDown) {
-      this.orangePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
-      orangeMoved = true;
-    } else if (this.keyD?.isDown) {
-      this.orangePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
-      orangeMoved = true;
-    }
+    if (this.mode === "online") {
+      const isMovingLeft = Boolean(this.keyA?.isDown || this.cursors?.left.isDown);
+      const isMovingRight = Boolean(this.keyD?.isDown || this.cursors?.right.isDown);
 
-    // Blue (Top): Arrow Left / Arrow Right (only in 1v1 mode)
-    if (this.mode !== "vs-bot") {
-      if (this.cursors?.left.isDown) {
-        this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
-        blueMoved = true;
-      } else if (this.cursors?.right.isDown) {
-        this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
-        blueMoved = true;
+      if (this.myRole === "orange") {
+        if (isMovingLeft) {
+          this.orangePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+          orangeMoved = true;
+          if (this.lastSentInput !== "paddle.left") {
+            this.lastSentInput = "paddle.left";
+            this.onlineConfig?.sendInput?.("paddle.left");
+          }
+        } else if (isMovingRight) {
+          this.orangePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+          orangeMoved = true;
+          if (this.lastSentInput !== "paddle.right") {
+            this.lastSentInput = "paddle.right";
+            this.onlineConfig?.sendInput?.("paddle.right");
+          }
+        } else if (this.lastSentInput && this.lastSentInput !== "paddle.stop") {
+          this.lastSentInput = "paddle.stop";
+          this.onlineConfig?.sendInput?.("paddle.stop");
+        }
+      } else {
+        if (isMovingLeft) {
+          this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+          blueMoved = true;
+          if (this.lastSentInput !== "paddle.left") {
+            this.lastSentInput = "paddle.left";
+            this.onlineConfig?.sendInput?.("paddle.left");
+          }
+        } else if (isMovingRight) {
+          this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+          blueMoved = true;
+          if (this.lastSentInput !== "paddle.right") {
+            this.lastSentInput = "paddle.right";
+            this.onlineConfig?.sendInput?.("paddle.right");
+          }
+        } else if (this.lastSentInput && this.lastSentInput !== "paddle.stop") {
+          this.lastSentInput = "paddle.stop";
+          this.onlineConfig?.sendInput?.("paddle.stop");
+        }
+      }
+    } else {
+      // Orange (Bottom): A / D
+      if (this.keyA?.isDown) {
+        this.orangePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+        orangeMoved = true;
+      } else if (this.keyD?.isDown) {
+        this.orangePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+        orangeMoved = true;
+      }
+
+      // Blue (Top): Arrow Left / Arrow Right (only in 1v1 mode)
+      if (this.mode !== "vs-bot") {
+        if (this.cursors?.left.isDown) {
+          this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+          blueMoved = true;
+        } else if (this.cursors?.right.isDown) {
+          this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+          blueMoved = true;
+        }
       }
     }
 
@@ -838,6 +956,13 @@ export class BrickBlastScene extends Phaser.Scene {
       this.isGameOver = true;
       this.showFloatingNotice(`Game Over • ${winnerIfLast === "orange" ? "Orange" : "Blue"} Wins!`);
 
+      if (this.mode === "online") {
+        this.onlineConfig?.sendGameEvent?.("game_over", {
+          winner: winnerIfLast,
+          score: this.score,
+        });
+      }
+
       this.callbacks.onGameOver?.({
         winner: winnerIfLast,
         score: this.score,
@@ -858,6 +983,13 @@ export class BrickBlastScene extends Phaser.Scene {
     this.isTransitioningLevel = true;
     this.score += POINTS_WIN_LEVEL;
     this.callbacks.onScoreUpdate?.(this.score);
+
+    if (this.mode === "online") {
+      this.onlineConfig?.sendGameEvent?.("level_complete", {
+        level: this.currentLevel + 1,
+        score: this.score,
+      });
+    }
 
     this.showFloatingNotice(`Level ${this.currentLevel} Clear!`);
 
@@ -907,8 +1039,9 @@ export class BrickBlastScene extends Phaser.Scene {
   // Controller API exposed to React GameHost
   public restartMatch(
     startingPlayer?: PlatformPlayer,
-    mode?: "1v1" | "vs-bot",
-    difficulty?: "easy" | "medium" | "hard"
+    mode?: "1v1" | "vs-bot" | "online",
+    difficulty?: "easy" | "medium" | "hard",
+    online?: OnlineNetworkingCallbacks
   ) {
     this.clearAllGameObjects();
     this.botController?.reset(GAME_WIDTH / 2);
@@ -917,12 +1050,33 @@ export class BrickBlastScene extends Phaser.Scene {
       callbacks: this.callbacks,
       mode: mode || this.mode,
       difficulty: difficulty || this.difficulty,
+      online: online || (this.onlineConfig ?? undefined),
     });
+    this.statusText?.setAlpha(0);
+    if (this.orangePaddle) {
+      this.orangePaddle.x = GAME_WIDTH / 2;
+      this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
+    }
+    if (this.bluePaddle) {
+      this.bluePaddle.x = GAME_WIDTH / 2;
+      this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+    }
     this.buildCurrentLevel();
     this.serveBall(this.currentStarter);
     this.callbacks.onLifecycleChange?.("playing");
     this.callbacks.onScoreUpdate?.(0);
     this.callbacks.onLevelChange?.(1);
+  }
+
+  private sendOnlinePaddlePosition(x: number) {
+    if (this.mode !== "online" || !this.onlineConfig?.sendInput) return;
+    const now = performance.now();
+    // Throttle to at most 1 update per 50ms (20 updates/sec max) and only if movement is noticeable (> 3px)
+    if (now - this.lastPointerSendTime >= 50 && Math.abs(x - this.lastSentPointerX) >= 3) {
+      this.lastPointerSendTime = now;
+      this.lastSentPointerX = x;
+      this.onlineConfig.sendInput("paddle.position", { x });
+    }
   }
 
   public pauseGame() {
@@ -951,6 +1105,46 @@ export class BrickBlastScene extends Phaser.Scene {
       soundManager.play("tileBreak");
     }
   }
+
+  public handleRemoteInput(data: { input: string; data?: unknown }) {
+    if (this.mode !== "online") return;
+    if (data.input === "paddle.left") {
+      this.opponentMoveIntent = -1;
+      this.opponentTargetX = null;
+    } else if (data.input === "paddle.right") {
+      this.opponentMoveIntent = 1;
+      this.opponentTargetX = null;
+    } else if (data.input === "paddle.stop") {
+      this.opponentMoveIntent = 0;
+    } else if (
+      data.input === "paddle.position" &&
+      data.data &&
+      typeof (data.data as Record<string, unknown>).x === "number"
+    ) {
+      this.opponentTargetX = (data.data as { x: number }).x;
+    }
+  }
+
+  public handleRemoteEvent(data: { event: string; data?: unknown }) {
+    if (this.mode !== "online") return;
+    if (data.event === "game_over" && !this.isGameOver) {
+      this.isGameOver = true;
+      const d = data.data as { winner?: PlatformPlayer; score?: number } | undefined;
+      const winner = d?.winner ?? "orange";
+      this.showFloatingNotice(`Game Over • ${winner === "orange" ? "Orange" : "Blue"} Wins!`);
+      this.callbacks.onGameOver?.({
+        winner,
+        score: d?.score ?? this.score,
+        details: {
+          level: this.currentLevel,
+          finalScore: d?.score ?? this.score,
+        },
+      });
+      this.callbacks.onLifecycleChange?.("finished");
+    }
+  }
+
+
 
   public shutdown() {
     this.removeCanvasPointerListeners();

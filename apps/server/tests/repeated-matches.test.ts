@@ -359,6 +359,100 @@ test("Repeated Match Lifecycle & Connection Stability", async (t) => {
     wsB.close();
   });
 
+  await t.test("Pattern 5: Connect Four repeated match cycles 5+ times (Create -> Join -> Move -> Leave -> New Room)", async () => {
+    const wsA = await createWsClient(wsUrl);
+    sendJson(wsA, { version: 1, type: "session.identify", requestId: "p5_a", payload: { displayName: "C4PlayerA" } });
+    await waitForMessage<SessionReadyPayload>(wsA, (e) => e.type === "session.ready");
+
+    const wsB = await createWsClient(wsUrl);
+    sendJson(wsB, { version: 1, type: "session.identify", requestId: "p5_b", payload: { displayName: "C4PlayerB" } });
+    await waitForMessage<SessionReadyPayload>(wsB, (e) => e.type === "session.ready");
+
+    for (let match = 1; match <= 5; match++) {
+      sendJson(wsA, {
+        version: 1,
+        type: "room.create",
+        requestId: `p5_c_${match}`,
+        payload: { gameId: "connect-four", maxPlayers: 2 },
+      });
+      const created = await waitForMessage<RoomCreatedPayload>(wsA, (e) => e.type === "room.created");
+      const { roomId, roomCode } = created.payload.room;
+
+      const guestJoinPromise = waitForMessage<RoomJoinedPayload>(wsB, (e) => e.type === "room.joined");
+      const hostStatePromise = waitForMessage<GameStatePayload>(wsA, (e) => e.type === "game.state");
+      sendJson(wsB, { version: 1, type: "room.join", requestId: `p5_j_${match}`, payload: { roomCode } });
+      await Promise.all([guestJoinPromise, hostStatePromise]);
+
+      // Move: Player A plays column 0
+      const aMoveHost = waitForMessage<GameStatePayload>(wsA, (e) => e.type === "game.state");
+      const aMoveGuest = waitForMessage<GameStatePayload>(wsB, (e) => e.type === "game.state");
+      sendJson(wsA, { version: 1, type: "game.move", requestId: `p5_m1_${match}`, payload: { roomId, column: 0 } });
+      await Promise.all([aMoveHost, aMoveGuest]);
+
+      // Both leave
+      const aLeave = waitForMessage<RoomLeftPayload>(wsA, (e) => e.type === "room.left");
+      sendJson(wsA, { version: 1, type: "room.leave", requestId: `p5_la_${match}`, payload: { roomId } });
+      await aLeave;
+
+      const bLeave = waitForMessage<RoomLeftPayload>(wsB, (e) => e.type === "room.left");
+      sendJson(wsB, { version: 1, type: "room.leave", requestId: `p5_lb_${match}`, payload: { roomId } });
+      await bLeave;
+    }
+
+    wsA.close();
+    wsB.close();
+  });
+
+  await t.test("Pattern 6: Brick Blast repeated match cycles 5+ times (Create -> Join -> Input -> Event -> Leave -> New Room)", async () => {
+    const wsA = await createWsClient(wsUrl);
+    sendJson(wsA, { version: 1, type: "session.identify", requestId: "p6_a", payload: { displayName: "BBPlayerA" } });
+    await waitForMessage<SessionReadyPayload>(wsA, (e) => e.type === "session.ready");
+
+    const wsB = await createWsClient(wsUrl);
+    sendJson(wsB, { version: 1, type: "session.identify", requestId: "p6_b", payload: { displayName: "BBPlayerB" } });
+    await waitForMessage<SessionReadyPayload>(wsB, (e) => e.type === "session.ready");
+
+    for (let match = 1; match <= 5; match++) {
+      sendJson(wsA, {
+        version: 1,
+        type: "room.create",
+        requestId: `p6_c_${match}`,
+        payload: { gameId: "brick-blast", maxPlayers: 2 },
+      });
+      const created = await waitForMessage<RoomCreatedPayload>(wsA, (e) => e.type === "room.created");
+      const { roomId, roomCode } = created.payload.room;
+
+      const guestJoinPromise = waitForMessage<RoomJoinedPayload>(wsB, (e) => e.type === "room.joined");
+      const hostStatePromise = waitForMessage<GameStatePayload>(wsA, (e) => e.type === "game.state");
+      sendJson(wsB, { version: 1, type: "room.join", requestId: `p6_j_${match}`, payload: { roomCode } });
+      await Promise.all([guestJoinPromise, hostStatePromise]);
+
+      // Player inputs
+      const inputHost = waitForMessage(wsA, (e) => e.type === "game.event" && (e.payload as any).type === "player_input");
+      const inputGuest = waitForMessage(wsB, (e) => e.type === "game.event" && (e.payload as any).type === "player_input");
+      sendJson(wsA, { version: 1, type: "game.input", requestId: `p6_inp_${match}`, payload: { roomId, input: "paddle.left" } });
+      await Promise.all([inputHost, inputGuest]);
+
+      // Game over event
+      const endHost = waitForMessage<GameStatePayload>(wsA, (e) => e.type === "game.state");
+      const endGuest = waitForMessage<GameStatePayload>(wsB, (e) => e.type === "game.state");
+      sendJson(wsA, { version: 1, type: "game.event", requestId: `p6_ev_${match}`, payload: { roomId, event: "game_over", data: { winner: "orange" } } });
+      await Promise.all([endHost, endGuest]);
+
+      // Both leave
+      const aLeave = waitForMessage<RoomLeftPayload>(wsA, (e) => e.type === "room.left");
+      sendJson(wsA, { version: 1, type: "room.leave", requestId: `p6_la_${match}`, payload: { roomId } });
+      await aLeave;
+
+      const bLeave = waitForMessage<RoomLeftPayload>(wsB, (e) => e.type === "room.left");
+      sendJson(wsB, { version: 1, type: "room.leave", requestId: `p6_lb_${match}`, payload: { roomId } });
+      await bLeave;
+    }
+
+    wsA.close();
+    wsB.close();
+  });
+
   await t.test("Resource Leak Check: No stale rooms, connections, or timers after all tests", async () => {
     // Wait briefly for all sockets to close completely
     await new Promise((r) => setTimeout(r, 100));

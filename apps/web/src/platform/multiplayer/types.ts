@@ -64,6 +64,59 @@ export interface OnlineTicTacToeState {
   disconnectedPlayerId?: string | null;
 }
 
+export type PlayerDisc = "R" | "Y";
+
+export interface ConnectFourWinningLine {
+  line: [number, number, number, number];
+  direction: "horizontal" | "vertical" | "diagonal-down" | "diagonal-up";
+}
+
+export interface ConnectFourLastMove {
+  column: number;
+  row: number;
+  player: PlayerDisc;
+}
+
+export interface OnlineConnectFourState {
+  board: (PlayerDisc | null)[];
+  columnCounts: [number, number, number, number, number, number, number];
+  currentPlayer: PlayerDisc;
+  startingPlayer: PlayerDisc;
+  status: "waiting" | "in_progress" | "won" | "draw";
+  winner: PlayerDisc | null;
+  winningLine: ConnectFourWinningLine | null;
+  lastMove?: ConnectFourLastMove | null;
+  moveCount: number;
+  playerDiscs: Record<string, PlayerDisc>;
+  rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+}
+
+export type BrickBlastPlayer = "orange" | "blue";
+
+export interface BrickBlastScore {
+  orange: number;
+  blue: number;
+}
+
+export interface OnlineBrickBlastState {
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  currentLevel: number;
+  startingPlayer: BrickBlastPlayer;
+  serverPlayer: BrickBlastPlayer;
+  scores: BrickBlastScore;
+  winner: BrickBlastPlayer | null;
+  playerRoles: Record<string, BrickBlastPlayer>;
+  rematchRequests: string[];
+  resultReason?: "win" | "disconnect_forfeit";
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  matchStartTime?: number;
+  ballSeed?: number;
+}
+
 export interface ServerEnvelope<T = unknown> {
   version: 1;
   type: string;
