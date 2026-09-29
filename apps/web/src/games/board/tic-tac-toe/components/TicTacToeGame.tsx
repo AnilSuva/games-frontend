@@ -552,7 +552,6 @@ export default function TicTacToeGame({
                 type="button"
                 onClick={() => {
                   soundManager.play("buttonClick");
-                  online.leaveRoom();
                   handleReturnToModes();
                 }}
                 className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"
@@ -570,7 +569,6 @@ export default function TicTacToeGame({
                 type="button"
                 onClick={() => {
                   soundManager.play("buttonClick");
-                  online.leaveRoom();
                   handleReturnToModes();
                 }}
                 className="text-[11px] text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer p-1"

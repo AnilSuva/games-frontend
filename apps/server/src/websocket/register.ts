@@ -113,10 +113,14 @@ export async function registerWebSocket(
   const heartbeatService = new HeartbeatService(
     connectionTracker,
     config.heartbeatIntervalMs,
-    (_connectionId, playerId) => {
-      fastify.log.info({ playerId }, "Cleaned up dead WebSocket connection");
+    (connectionId, playerId) => {
+      fastify.log.info({ playerId, connectionId }, "Cleaned up dead WebSocket connection");
       if (playerId) {
-        notifyPlayerDisconnect(playerId, roomManager, connectionTracker);
+        const isCurrent =
+          connectionTracker.getByPlayerId(playerId)?.connectionId === connectionId;
+        if (isCurrent) {
+          notifyPlayerDisconnect(playerId, roomManager, connectionTracker);
+        }
       }
     }
   );
@@ -221,9 +225,13 @@ export async function registerWebSocket(
           "WebSocket connection closed"
         );
 
+        const isCurrent =
+          playerConn.playerId &&
+          connectionTracker.getByPlayerId(playerConn.playerId)?.connectionId === playerConn.connectionId;
+
         connectionTracker.remove(playerConn.connectionId);
 
-        if (playerConn.playerId) {
+        if (playerConn.playerId && isCurrent) {
           notifyPlayerDisconnect(playerConn.playerId, roomManager, connectionTracker);
         }
       });

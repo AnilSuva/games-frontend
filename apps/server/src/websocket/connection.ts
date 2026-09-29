@@ -77,6 +77,21 @@ export class ConnectionTracker {
   }
 
   public bindPlayerId(connectionId: string, playerId: string): void {
+    const existingConnectionId = this.connectionIdByPlayerId.get(playerId);
+    if (existingConnectionId && existingConnectionId !== connectionId) {
+      const existingConn = this.connectionsById.get(existingConnectionId);
+      if (existingConn) {
+        // Disassociate playerId from stale connection so its close handler won't trigger disconnect
+        existingConn.playerId = undefined;
+        try {
+          existingConn.close(1000, "Replaced by new connection");
+        } catch {
+          existingConn.terminate();
+        }
+        this.connectionsById.delete(existingConnectionId);
+      }
+    }
+
     const connection = this.connectionsById.get(connectionId);
     if (connection) {
       connection.playerId = playerId;
@@ -88,7 +103,8 @@ export class ConnectionTracker {
     const conn = this.connectionsById.get(connectionId);
     if (conn) {
       this.connectionsById.delete(connectionId);
-      if (conn.playerId) {
+      // Only delete playerId mapping if it is still pointing to this exact connection
+      if (conn.playerId && this.connectionIdByPlayerId.get(conn.playerId) === connectionId) {
         this.connectionIdByPlayerId.delete(conn.playerId);
       }
     }

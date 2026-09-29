@@ -20,6 +20,7 @@ import type {
 
 const CONNECTION_TIMEOUT_MS = 10_000;
 const ROOM_OPERATION_TIMEOUT_MS = 8_000;
+const PING_INTERVAL_MS = 20_000;
 
 export interface UseMultiplayerRoomOptions {
   gameId: string;
@@ -43,10 +44,12 @@ export function useMultiplayerRoom({
 
   const socketRef = useRef<WebSocket | null>(null);
   const roomRef = useRef<RoomDto | null>(null);
+  const connectionGenRef = useRef<number>(0);
   const reconnectAttemptsRef = useRef<number>(0);
   const manualDisconnectRef = useRef<boolean>(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
+  const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onMessageRef = useRef(onMessage);
   const onRoomUpdatedRef = useRef(onRoomUpdated);
 
@@ -79,6 +82,33 @@ export function useMultiplayerRoom({
     }
   }, []);
 
+  const stopPingTimer = useCallback(() => {
+    if (pingTimerRef.current) {
+      clearInterval(pingTimerRef.current);
+      pingTimerRef.current = null;
+    }
+  }, []);
+
+  const startPingTimer = useCallback(() => {
+    stopPingTimer();
+    pingTimerRef.current = setInterval(() => {
+      const ws = socketRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          const envelope: ClientEnvelope<{ clientTime: number }> = {
+            version: 1,
+            type: "ping",
+            requestId: nextRequestId(),
+            payload: { clientTime: Date.now() },
+          };
+          ws.send(JSON.stringify(envelope));
+        } catch {
+          // ignore
+        }
+      }
+    }, PING_INTERVAL_MS);
+  }, [stopPingTimer]);
+
   const startRoomTimeout = useCallback(
     (operation: "create" | "join") => {
       clearRoomTimeout();
@@ -107,8 +137,12 @@ export function useMultiplayerRoom({
         requestId,
         payload,
       };
-      ws.send(JSON.stringify(envelope));
-      return requestId;
+      try {
+        ws.send(JSON.stringify(envelope));
+        return requestId;
+      } catch {
+        return null;
+      }
     },
     []
   );
@@ -127,6 +161,9 @@ export function useMultiplayerRoom({
           };
           setMyPlayerId(payload.playerId);
           setStoredSessionToken(payload.sessionToken);
+
+          // Keep alive on active session
+          startPingTimer();
 
           if (pendingActionRef.current) {
             setStoredRoomInfo(null);
@@ -240,12 +277,18 @@ export function useMultiplayerRoom({
           setConnectionState("connected");
           break;
         }
+
+        case "server.pong": {
+          // Heartbeat acknowledged
+          break;
+        }
       }
     },
-    [clearConnectionTimeout, clearRoomTimeout, sendMessage]
+    [clearConnectionTimeout, clearRoomTimeout, sendMessage, startPingTimer]
   );
 
   const connect = useCallback(() => {
+    // If active socket is already connecting or open, prevent duplicate creation
     if (
       socketRef.current &&
       (socketRef.current.readyState === WebSocket.OPEN ||
@@ -253,6 +296,24 @@ export function useMultiplayerRoom({
     ) {
       return;
     }
+
+    // Detach and close any previous socket
+    if (socketRef.current) {
+      const prevWs = socketRef.current;
+      prevWs.onopen = null;
+      prevWs.onmessage = null;
+      prevWs.onclose = null;
+      prevWs.onerror = null;
+      try {
+        prevWs.close(1000, "Opening fresh socket");
+      } catch {
+        // ignore
+      }
+      socketRef.current = null;
+    }
+
+    // Monotonically advance connection generation to invalidate stale callbacks
+    const gen = ++connectionGenRef.current;
 
     setConnectionState((prev) =>
       prev === "disconnected" || prev === "connection_failed"
@@ -264,6 +325,7 @@ export function useMultiplayerRoom({
 
     clearConnectionTimeout();
     connectionTimeoutRef.current = setTimeout(() => {
+      if (gen !== connectionGenRef.current) return;
       if (socketRef.current && socketRef.current.readyState !== WebSocket.OPEN) {
         try {
           socketRef.current.close();
@@ -273,6 +335,7 @@ export function useMultiplayerRoom({
         socketRef.current = null;
       }
       clearRoomTimeout();
+      stopPingTimer();
       pendingActionRef.current = null;
       setConnectionState("connection_failed");
       setErrorMessage(
@@ -285,6 +348,7 @@ export function useMultiplayerRoom({
     socketRef.current = ws;
 
     ws.onopen = () => {
+      if (gen !== connectionGenRef.current) return;
       reconnectAttemptsRef.current = 0;
       setConnectionState("identifying");
       const existingToken = getStoredSessionToken();
@@ -295,6 +359,7 @@ export function useMultiplayerRoom({
     };
 
     ws.onmessage = (event) => {
+      if (gen !== connectionGenRef.current) return;
       try {
         const envelope = JSON.parse(event.data as string) as ServerEnvelope;
         handleServerEnvelope(envelope);
@@ -304,8 +369,10 @@ export function useMultiplayerRoom({
     };
 
     ws.onclose = (event) => {
+      if (gen !== connectionGenRef.current) return;
       clearConnectionTimeout();
       clearRoomTimeout();
+      stopPingTimer();
       socketRef.current = null;
 
       if (manualDisconnectRef.current) {
@@ -323,7 +390,7 @@ export function useMultiplayerRoom({
           5000
         );
         setTimeout(() => {
-          if (!manualDisconnectRef.current) {
+          if (!manualDisconnectRef.current && gen === connectionGenRef.current) {
             connectRef.current?.();
           }
         }, delay);
@@ -344,6 +411,7 @@ export function useMultiplayerRoom({
     };
 
     ws.onerror = () => {
+      if (gen !== connectionGenRef.current) return;
       // WebSocket close handler fires immediately after error
     };
   }, [
@@ -351,6 +419,7 @@ export function useMultiplayerRoom({
     clearRoomTimeout,
     handleServerEnvelope,
     sendMessage,
+    stopPingTimer,
   ]);
 
   useEffect(() => {
@@ -359,10 +428,14 @@ export function useMultiplayerRoom({
 
   // Clean disconnect & leave active room
   const disconnect = useCallback(() => {
+    // Invalidate any callbacks from previous sockets
+    connectionGenRef.current++;
     clearConnectionTimeout();
     clearRoomTimeout();
+    stopPingTimer();
     manualDisconnectRef.current = true;
     pendingActionRef.current = null;
+    reconnectAttemptsRef.current = 0;
 
     const ws = socketRef.current;
     const storedRoom = getStoredRoomInfo();
@@ -385,6 +458,10 @@ export function useMultiplayerRoom({
     setStoredRoomInfo(null);
 
     if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
       try {
         ws.close(1000, "User departed");
       } catch {
@@ -396,7 +473,7 @@ export function useMultiplayerRoom({
     setConnectionState("disconnected");
     setRoom(null);
     setErrorMessage(null);
-  }, [clearConnectionTimeout, clearRoomTimeout, room]);
+  }, [clearConnectionTimeout, clearRoomTimeout, room, stopPingTimer]);
 
   // Create room
   const createRoom = useCallback(
@@ -463,6 +540,7 @@ export function useMultiplayerRoom({
   // Leave room while keeping connection active
   const leaveRoom = useCallback(() => {
     clearRoomTimeout();
+    reconnectAttemptsRef.current = 0;
     const storedRoom = getStoredRoomInfo();
     const targetRoomId = room?.roomId ?? storedRoom?.roomId;
     if (targetRoomId) {
@@ -477,8 +555,11 @@ export function useMultiplayerRoom({
   // Auto-cleanup on unmount (e.g. user navigates Home or away from the game)
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      connectionGenRef.current++;
       clearConnectionTimeout();
       clearRoomTimeout();
+      stopPingTimer();
       manualDisconnectRef.current = true;
 
       const ws = socketRef.current;
@@ -502,6 +583,10 @@ export function useMultiplayerRoom({
       setStoredRoomInfo(null);
 
       if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
         try {
           ws.close(1000, "Component unmounted");
         } catch {
@@ -510,7 +595,7 @@ export function useMultiplayerRoom({
         socketRef.current = null;
       }
     };
-  }, [clearConnectionTimeout, clearRoomTimeout]);
+  }, [clearConnectionTimeout, clearRoomTimeout, stopPingTimer]);
 
   const opponentPlayer: RoomPlayerDto | null =
     room && myPlayerId
