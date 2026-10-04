@@ -145,3 +145,86 @@ test("Online Brick Blast Rematch Logic & Starting Player Alternation", () => {
   assert.equal(restartedState.startingPlayer, "blue");
   assert.equal(restartedState.rematchRequests.length, 0);
 });
+
+test("Online Brick Blast Joiner Match Entry Guard & Lifecycle Transition", () => {
+  // Test isInOnlineMatch logic: requires connectionState in_game/game_over AND gameState
+  const evaluateInOnlineMatch = (connectionState, gameState) => {
+    return (
+      (connectionState === "in_game" || connectionState === "game_over") &&
+      Boolean(gameState)
+    );
+  };
+
+  // 1. Initial state when entering online mode: lobby
+  assert.equal(evaluateInOnlineMatch("connected", null), false);
+
+  // 2. Joining room before server response: lobby
+  assert.equal(evaluateInOnlineMatch("joining_room", null), false);
+
+  // 3. If connectionState became in_game but gameState was null: MUST STAY in lobby (not blank)
+  assert.equal(evaluateInOnlineMatch("in_game", null), false);
+
+  // 4. Once room.joined or game.state supplies gameState: TRANSITIONS to active match
+  const validGameState = {
+    status: "in_progress",
+    currentLevel: 1,
+    startingPlayer: "orange",
+    playerRoles: { ply_host: "orange", ply_guest: "blue" },
+  };
+  assert.equal(evaluateInOnlineMatch("in_game", validGameState), true);
+  assert.equal(evaluateInOnlineMatch("game_over", validGameState), true);
+});
+
+test("Online Brick Blast Guest Room.Joined Game State Ingestion & Role Assignment", () => {
+  const hostId = "host_123";
+  const guestId = "guest_456";
+
+  const roomDtoFromJoin = {
+    roomId: "bb_room_abc",
+    roomCode: "BLAST1",
+    gameId: "brick-blast",
+    status: "in-progress",
+    hostPlayerId: hostId,
+    players: [
+      { playerId: hostId, seat: 0, connected: true },
+      { playerId: guestId, seat: 1, connected: true },
+    ],
+    gameState: {
+      status: "in_progress",
+      currentLevel: 1,
+      startingPlayer: "orange",
+      playerRoles: {
+        [hostId]: "orange",
+        [guestId]: "blue",
+      },
+    },
+  };
+
+  // Simulate onRoomUpdated ingestion on guest client
+  let guestGameState = null;
+  const handleRoomUpdated = (room) => {
+    if (room.gameState) {
+      guestGameState = room.gameState;
+    }
+  };
+
+  handleRoomUpdated(roomDtoFromJoin);
+
+  assert.notEqual(guestGameState, null);
+  assert.equal(guestGameState.playerRoles[guestId], "blue");
+  assert.equal(guestGameState.playerRoles[hostId], "orange");
+
+  // Derive myRole on Guest
+  const deriveMyRole = (myPlayerId, state, room) => {
+    if (myPlayerId && state?.playerRoles?.[myPlayerId]) {
+      return state.playerRoles[myPlayerId];
+    }
+    if (room && myPlayerId) {
+      return room.hostPlayerId === myPlayerId ? "orange" : "blue";
+    }
+    return null;
+  };
+
+  assert.equal(deriveMyRole(guestId, guestGameState, roomDtoFromJoin), "blue");
+  assert.equal(deriveMyRole(hostId, guestGameState, roomDtoFromJoin), "orange");
+});

@@ -75,9 +75,7 @@ export default function BrickBlastGame({
   const online = useOnlineBrickBlast();
 
   const onlineRef = useRef(online);
-  useEffect(() => {
-    onlineRef.current = online;
-  });
+  onlineRef.current = online;
 
   const callbacksRef = useRef({
     onGameOver,
@@ -120,9 +118,10 @@ export default function BrickBlastGame({
         setInModeSelection(false);
         setIsPopupDismissed(false);
         setGameOverResult(null);
+        online.connect();
       }
     },
-    [onLifecycleChange, onScoreUpdate]
+    [onLifecycleChange, onScoreUpdate, online]
   );
 
   const handleReturnToModes = useCallback(() => {
@@ -265,10 +264,12 @@ export default function BrickBlastGame({
   );
 
   // Phaser Game instance lifecycle: mounted strictly when in an active game
-  const isOnlineLobby =
+  const isInOnlineMatch =
     selectedMode === "online" &&
-    online.connectionState !== "in_game" &&
-    online.connectionState !== "game_over";
+    (online.connectionState === "in_game" || online.connectionState === "game_over") &&
+    Boolean(online.gameState);
+
+  const isOnlineLobby = selectedMode === "online" && !isInOnlineMatch;
 
   useEffect(() => {
     if (inModeSelection || isOnlineLobby) return;
@@ -387,6 +388,9 @@ export default function BrickBlastGame({
           },
         };
 
+        if (selectedMode === "online") {
+          callbacksRef.current.onLifecycleChange?.("playing");
+        }
         callbacksRef.current.onReady(controller);
       });
     }

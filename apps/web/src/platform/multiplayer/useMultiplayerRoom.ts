@@ -198,6 +198,7 @@ export function useMultiplayerRoom({
             roomCode: payload.room.roomCode,
             reconnectToken: payload.reconnectToken,
           });
+          onRoomUpdatedRef.current?.(payload.room, "room_created");
           setConnectionState("waiting_for_opponent");
           setErrorMessage(null);
           break;
@@ -215,6 +216,7 @@ export function useMultiplayerRoom({
             roomCode: payload.room.roomCode,
             reconnectToken: payload.reconnectToken,
           });
+          onRoomUpdatedRef.current?.(payload.room, "player_joined");
 
           if (payload.room.players.length >= 2) {
             setConnectionState("in_game");
@@ -242,6 +244,15 @@ export function useMultiplayerRoom({
             setIsOpponentConnected(true);
           } else if (payload.reason === "player_left") {
             setIsOpponentConnected(false);
+          }
+
+          if (
+            payload.room.status === "in-progress" ||
+            payload.room.players.length >= 2
+          ) {
+            setConnectionState((prev) =>
+              prev !== "reconnecting" && prev !== "game_over" ? "in_game" : prev
+            );
           }
           break;
         }
