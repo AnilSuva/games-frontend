@@ -228,3 +228,153 @@ test("Online Brick Blast Guest Room.Joined Game State Ingestion & Role Assignmen
   assert.equal(deriveMyRole(guestId, guestGameState, roomDtoFromJoin), "blue");
   assert.equal(deriveMyRole(hostId, guestGameState, roomDtoFromJoin), "orange");
 });
+
+test("Online Brick Blast Paddle Ownership: Self input echo rejection & opponent routing", () => {
+  const blueClient = {
+    myRole: "blue",
+    myPlayerId: "guest_blue",
+    opponentRole: "orange",
+    bluePaddleX: 180,
+    orangePaddleX: 180,
+    opponentTargetX: null,
+    opponentMoveIntent: 0,
+    handleRemoteInput(msg) {
+      if (msg.playerRole && msg.playerRole === this.myRole) return;
+      if (this.myPlayerId && msg.playerId && msg.playerId === this.myPlayerId) return;
+      if (msg.playerRole && msg.playerRole !== this.opponentRole) return;
+
+      if (msg.input === "paddle.left") {
+        this.opponentMoveIntent = -1;
+        this.opponentTargetX = null;
+      } else if (msg.input === "paddle.right") {
+        this.opponentMoveIntent = 1;
+        this.opponentTargetX = null;
+      } else if (msg.input === "paddle.stop") {
+        this.opponentMoveIntent = 0;
+      } else if (msg.input === "paddle.position" && msg.data?.x !== undefined) {
+        this.opponentTargetX = msg.data.x;
+      }
+    },
+  };
+
+  // 1. Blue moves Blue paddle locally to 240
+  blueClient.bluePaddleX = 240;
+
+  // 2. Server echoes Blue's own input back to Blue
+  blueClient.handleRemoteInput({
+    type: "player_input",
+    playerId: "guest_blue",
+    playerRole: "blue",
+    input: "paddle.position",
+    data: { x: 240 },
+  });
+
+  // Self echo MUST be rejected: opponent target must NOT change to 240
+  assert.equal(blueClient.opponentTargetX, null);
+  assert.equal(blueClient.opponentMoveIntent, 0);
+  assert.equal(blueClient.orangePaddleX, 180); // Orange paddle untouched
+  assert.equal(blueClient.bluePaddleX, 240); // Blue paddle remains at 240
+
+  // 3. Orange moves Orange paddle to 100 and sends input to Blue
+  blueClient.handleRemoteInput({
+    type: "player_input",
+    playerId: "host_orange",
+    playerRole: "orange",
+    input: "paddle.position",
+    data: { x: 100 },
+  });
+
+  // Opponent input MUST be accepted: opponentTargetX is updated to 100
+  assert.equal(blueClient.opponentTargetX, 100);
+  // Blue's own paddle is untouched
+  assert.equal(blueClient.bluePaddleX, 240);
+
+  // 4. Test Orange client receiving Blue's input
+  const orangeClient = {
+    myRole: "orange",
+    myPlayerId: "host_orange",
+    opponentRole: "blue",
+    orangePaddleX: 100,
+    bluePaddleX: 180,
+    opponentTargetX: null,
+    opponentMoveIntent: 0,
+    handleRemoteInput: blueClient.handleRemoteInput,
+  };
+
+  // Orange receives own echo: must reject
+  orangeClient.handleRemoteInput({
+    type: "player_input",
+    playerId: "host_orange",
+    playerRole: "orange",
+    input: "paddle.position",
+    data: { x: 100 },
+  });
+  assert.equal(orangeClient.opponentTargetX, null);
+
+  // Orange receives Blue's input: must accept
+  orangeClient.handleRemoteInput({
+    type: "player_input",
+    playerId: "guest_blue",
+    playerRole: "blue",
+    input: "paddle.position",
+    data: { x: 240 },
+  });
+  assert.equal(orangeClient.opponentTargetX, 240);
+  assert.equal(orangeClient.orangePaddleX, 100); // Orange's own paddle untouched
+});
+
+test("Online Brick Blast Client Hook: Filters out own input echo from server broadcast", () => {
+  let receivedRemoteInput = null;
+  const myPlayerId = "guest_blue";
+  const myRole = "blue";
+
+  const onRemoteInput = (data) => {
+    receivedRemoteInput = data;
+  };
+
+  const handleServerMessage = (envelope) => {
+    if (envelope.type === "game.event") {
+      const payload = envelope.payload;
+      if (payload.type === "player_input") {
+        const inputPlayerId = typeof payload.playerId === "string" ? payload.playerId : null;
+        const inputPlayerRole = typeof payload.playerRole === "string" ? payload.playerRole : null;
+        if (
+          (myPlayerId && inputPlayerId === myPlayerId) ||
+          (myRole && inputPlayerRole === myRole)
+        ) {
+          return;
+        }
+        onRemoteInput(payload);
+      }
+    }
+  };
+
+  // 1. Server broadcasts Blue's own input to Blue
+  handleServerMessage({
+    type: "game.event",
+    payload: {
+      type: "player_input",
+      playerId: "guest_blue",
+      playerRole: "blue",
+      input: "paddle.position",
+      data: { x: 200 },
+    },
+  });
+  assert.equal(receivedRemoteInput, null);
+
+  // 2. Server broadcasts Orange's input to Blue
+  handleServerMessage({
+    type: "game.event",
+    payload: {
+      type: "player_input",
+      playerId: "host_orange",
+      playerRole: "orange",
+      input: "paddle.position",
+      data: { x: 120 },
+    },
+  });
+  assert.notEqual(receivedRemoteInput, null);
+  assert.equal(receivedRemoteInput.playerRole, "orange");
+  assert.equal(receivedRemoteInput.data.x, 120);
+});
+

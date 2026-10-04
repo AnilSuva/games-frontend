@@ -37,6 +37,7 @@ export interface OnlineNetworkingCallbacks {
   sendInput?: (input: string, data?: unknown) => void;
   sendGameEvent?: (event: string, data?: unknown) => void;
   myRole?: PlatformPlayer;
+  myPlayerId?: string;
 }
 
 export interface SceneInitData {
@@ -59,6 +60,7 @@ export class BrickBlastScene extends Phaser.Scene {
   private botController: BrickBlastBotController | null = null;
   private onlineConfig: OnlineNetworkingCallbacks | null = null;
   private myRole: PlatformPlayer = "orange";
+  private myPlayerId: string | null = null;
 
   public get controlledBotPaddle(): PlatformPlayer {
     return this.botPaddle;
@@ -88,6 +90,8 @@ export class BrickBlastScene extends Phaser.Scene {
   private onCanvasPointerDown?: (e: PointerEvent) => void;
   private onCanvasPointerMove?: (e: PointerEvent) => void;
   private onCanvasPointerUp?: (e: PointerEvent) => void;
+  private onWindowPointerUp?: (e: PointerEvent) => void;
+  private onWindowReset?: () => void;
   private activePointers = new Map<number, "orange" | "blue">();
 
   private ballIdCounter = 0;
@@ -150,6 +154,7 @@ export class BrickBlastScene extends Phaser.Scene {
     this.botPaddle = data.botPaddle || "blue";
     this.onlineConfig = data.online || null;
     this.myRole = data.online?.myRole || "orange";
+    this.myPlayerId = data.online?.myPlayerId || null;
     this.opponentMoveIntent = 0;
     this.opponentTargetX = null;
     this.lastSentInput = null;
@@ -362,6 +367,23 @@ export class BrickBlastScene extends Phaser.Scene {
     canvas.addEventListener("pointermove", this.onCanvasPointerMove, { passive: false });
     canvas.addEventListener("pointerup", this.onCanvasPointerUp, { passive: false });
     canvas.addEventListener("pointercancel", this.onCanvasPointerUp, { passive: false });
+
+    if (typeof window !== "undefined") {
+      this.onWindowPointerUp = (e: PointerEvent) => this.handleNativePointerUp(e);
+      this.onWindowReset = () => {
+        this.activePointers.clear();
+        if (this.mode === "online" && this.lastSentInput && this.lastSentInput !== "paddle.stop") {
+          this.lastSentInput = "paddle.stop";
+          this.onlineConfig?.sendInput?.("paddle.stop");
+        }
+      };
+
+      window.addEventListener("pointerup", this.onWindowPointerUp, { passive: true });
+      window.addEventListener("pointercancel", this.onWindowPointerUp, { passive: true });
+      window.addEventListener("resize", this.onWindowReset, { passive: true });
+      window.addEventListener("orientationchange", this.onWindowReset, { passive: true });
+      window.addEventListener("blur", this.onWindowReset, { passive: true });
+    }
   }
 
   private removeCanvasPointerListeners() {
@@ -376,6 +398,19 @@ export class BrickBlastScene extends Phaser.Scene {
       if (this.onCanvasPointerUp) {
         canvas.removeEventListener("pointerup", this.onCanvasPointerUp);
         canvas.removeEventListener("pointercancel", this.onCanvasPointerUp);
+      }
+    }
+    if (typeof window !== "undefined") {
+      if (this.onWindowPointerUp) {
+        window.removeEventListener("pointerup", this.onWindowPointerUp);
+        window.removeEventListener("pointercancel", this.onWindowPointerUp);
+        this.onWindowPointerUp = undefined;
+      }
+      if (this.onWindowReset) {
+        window.removeEventListener("resize", this.onWindowReset);
+        window.removeEventListener("orientationchange", this.onWindowReset);
+        window.removeEventListener("blur", this.onWindowReset);
+        this.onWindowReset = undefined;
       }
     }
     this.activePointers.clear();
@@ -514,6 +549,15 @@ export class BrickBlastScene extends Phaser.Scene {
     }
 
     this.activePointers.delete(e.pointerId);
+
+    if (this.mode === "online" && this.activePointers.size === 0) {
+      const myPaddle = this.myRole === "orange" ? this.orangePaddle : this.bluePaddle;
+      if (myPaddle && Math.abs(myPaddle.x - this.lastSentPointerX) >= 1) {
+        this.lastSentPointerX = myPaddle.x;
+        this.lastPointerSendTime = performance.now();
+        this.onlineConfig?.sendInput?.("paddle.position", { x: myPaddle.x });
+      }
+    }
   }
 
   update(_time: number, delta: number) {
@@ -1132,13 +1176,17 @@ export class BrickBlastScene extends Phaser.Scene {
 
   public pauseGame() {
     this.isPaused = true;
-    this.statusText.setText("PAUSED").setAlpha(1);
+    if (this.statusText) {
+      this.statusText.setText("PAUSED").setAlpha(1);
+    }
     this.callbacks.onLifecycleChange?.("paused");
   }
 
   public resumeGame() {
     this.isPaused = false;
-    this.statusText.setAlpha(0);
+    if (this.statusText) {
+      this.statusText.setAlpha(0);
+    }
     this.callbacks.onLifecycleChange?.("playing");
   }
 
@@ -1157,8 +1205,22 @@ export class BrickBlastScene extends Phaser.Scene {
     }
   }
 
-  public handleRemoteInput(data: { input: string; data?: unknown }) {
+  public handleRemoteInput(data: {
+    input: string;
+    data?: unknown;
+    playerRole?: string;
+    playerId?: string;
+  }) {
     if (this.mode !== "online") return;
+
+    // Reject self input echo
+    if (data.playerRole && data.playerRole === this.myRole) return;
+    if (this.myPlayerId && data.playerId && data.playerId === this.myPlayerId) return;
+
+    // Only apply if the input corresponds to the expected opponent role
+    const expectedOpponentRole = this.myRole === "orange" ? "blue" : "orange";
+    if (data.playerRole && data.playerRole !== expectedOpponentRole) return;
+
     if (data.input === "paddle.left") {
       this.opponentMoveIntent = -1;
       this.opponentTargetX = null;

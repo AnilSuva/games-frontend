@@ -26,6 +26,8 @@ export function useOnlineBrickBlast() {
 
   const onRemoteInputRef = useRef<((data: RemoteInputData) => void) | null>(null);
   const onRemoteEventRef = useRef<((data: RemoteGameEventData) => void) | null>(null);
+  const myPlayerIdRef = useRef<string | null>(null);
+  const myRoleRef = useRef<BrickBlastPlayer | null>(null);
 
   const handleServerMessage = useCallback((envelope: ServerEnvelope) => {
     if (envelope.type === "game.state") {
@@ -38,6 +40,16 @@ export function useOnlineBrickBlast() {
     } else if (envelope.type === "game.event") {
       const payload = envelope.payload as Record<string, unknown>;
       if (payload.type === "player_input") {
+        const inputPlayerId = typeof payload.playerId === "string" ? payload.playerId : null;
+        const inputPlayerRole = typeof payload.playerRole === "string" ? payload.playerRole : null;
+        const myPlayerId = myPlayerIdRef.current;
+        const currentRole = myRoleRef.current;
+        if (
+          (myPlayerId && inputPlayerId === myPlayerId) ||
+          (currentRole && inputPlayerRole === currentRole)
+        ) {
+          return;
+        }
         onRemoteInputRef.current?.(payload as unknown as RemoteInputData);
       } else if (payload.type === "game_event" || payload.event) {
         onRemoteEventRef.current?.(payload as unknown as RemoteGameEventData);
@@ -193,6 +205,11 @@ export function useOnlineBrickBlast() {
 
   const opponentRole: BrickBlastPlayer | null =
     myRole === "orange" ? "blue" : myRole === "blue" ? "orange" : null;
+
+  useEffect(() => {
+    myPlayerIdRef.current = multiplayer.myPlayerId;
+    myRoleRef.current = myRole;
+  }, [multiplayer.myPlayerId, myRole]);
 
   const effectiveOpponentConnected =
     multiplayer.isOpponentConnected &&

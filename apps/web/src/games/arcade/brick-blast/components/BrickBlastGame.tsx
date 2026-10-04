@@ -75,7 +75,9 @@ export default function BrickBlastGame({
   const online = useOnlineBrickBlast();
 
   const onlineRef = useRef(online);
-  onlineRef.current = online;
+  useEffect(() => {
+    onlineRef.current = online;
+  });
 
   const callbacksRef = useRef({
     onGameOver,
@@ -160,6 +162,7 @@ export default function BrickBlastGame({
         sendInput: online.sendInput,
         sendGameEvent: online.sendGameEvent,
         myRole: online.myRole ?? "orange",
+        myPlayerId: online.myPlayerId ?? undefined,
       });
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
@@ -171,16 +174,20 @@ export default function BrickBlastGame({
     online.sendInput,
     online.sendGameEvent,
     online.myRole,
+    online.myPlayerId,
     onLifecycleChange,
     onScoreUpdate,
   ]);
 
   // Handle online match pause/resume on disconnect
+  const wasOnlinePausedRef = useRef(false);
   useEffect(() => {
     if (selectedMode !== "online") return;
     if (online.isMatchPaused) {
+      wasOnlinePausedRef.current = true;
       sceneRef.current?.pauseGame();
-    } else if (online.connectionState === "in_game") {
+    } else if (wasOnlinePausedRef.current && online.connectionState === "in_game") {
+      wasOnlinePausedRef.current = false;
       sceneRef.current?.resumeGame();
     }
   }, [selectedMode, online.isMatchPaused, online.connectionState]);
@@ -323,6 +330,7 @@ export default function BrickBlastGame({
                   sendGameEvent: (event: string, data?: unknown) =>
                     onlineRef.current.sendGameEvent(event, data as Parameters<typeof onlineRef.current.sendGameEvent>[1]),
                   myRole: onlineRef.current.myRole ?? "orange",
+                  myPlayerId: onlineRef.current.myPlayerId ?? undefined,
                 }
               : undefined,
           callbacks: {

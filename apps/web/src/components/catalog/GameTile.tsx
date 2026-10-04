@@ -6,13 +6,14 @@ import { soundManager } from "@/platform/audio";
 
 interface GameTileProps {
   game: GameMetadata;
+  className?: string;
 }
 
 /**
  * Compact game tile for mobile/tablet discovery.
  * Shows only logo and game name.
  */
-export function GameTile({ game }: GameTileProps) {
+export function GameTile({ game, className = "" }: GameTileProps) {
   const isAvailable = game.status === "available";
   const href = `/games/${game.id}`;
 
@@ -22,11 +23,11 @@ export function GameTile({ game }: GameTileProps) {
         href,
         onClick: () => soundManager.play("buttonClick"),
         className:
-          "group flex flex-col items-center p-3 rounded-2xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917]",
+          `group flex flex-col items-center p-3 rounded-2xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${className}`.trim(),
       }
     : {
         className:
-          "flex flex-col items-center p-3 rounded-2xl bg-[#faf9f6] border border-[#eeece6] opacity-65 cursor-not-allowed select-none",
+          `flex flex-col items-center p-3 rounded-2xl bg-[#faf9f6] border border-[#eeece6] opacity-65 cursor-not-allowed select-none ${className}`.trim(),
       };
 
   return (

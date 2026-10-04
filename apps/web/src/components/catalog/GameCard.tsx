@@ -4,6 +4,7 @@ import { soundManager } from "@/platform/audio";
 
 interface GameCardProps {
   game: GameMetadata;
+  className?: string;
 }
 
 /**
@@ -98,7 +99,7 @@ function GameIllustration({ id }: { id: string }) {
   }
 }
 
-export function GameCard({ game }: GameCardProps) {
+export function GameCard({ game, className = "" }: GameCardProps) {
   const isAvailable = game.status === "available";
   const href = `/games/${game.id}`;
 
@@ -108,11 +109,11 @@ export function GameCard({ game }: GameCardProps) {
         href,
         onClick: () => soundManager.play("buttonClick"),
         className:
-          "group flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917]",
+          `group flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-white border border-[#e6e3dc] hover:border-[#1c1917] hover:shadow-sm transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917] ${className}`.trim(),
       }
     : {
         className:
-          "flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-[#faf9f6] border border-[#eeece6] opacity-65 cursor-not-allowed select-none",
+          `flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-[#faf9f6] border border-[#eeece6] opacity-65 cursor-not-allowed select-none ${className}`.trim(),
       };
 
   return (
