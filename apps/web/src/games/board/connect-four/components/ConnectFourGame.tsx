@@ -124,6 +124,7 @@ export default function ConnectFourGame({
 
   useEffect(() => {
     return () => {
+      botAbortControllerRef.current?.abort();
       terminateBotWorker();
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
@@ -448,15 +449,22 @@ export default function ConnectFourGame({
     handleReturnToModes();
   }, [online, handleReturnToModes]);
 
+  const startFreshMatchRef = useRef(startFreshMatch);
+  useEffect(() => {
+    startFreshMatchRef.current = startFreshMatch;
+  });
+
+  const executeMoveRef = useRef(executeMove);
+  useEffect(() => {
+    executeMoveRef.current = executeMove;
+  });
+
   useEffect(() => {
     const controller: IGameController = {
-      restart: startFreshMatch,
+      restart: () => startFreshMatchRef.current(),
     };
     onReady(controller);
-    return () => {
-      botAbortControllerRef.current?.abort();
-    };
-  }, [startFreshMatch, onReady]);
+  }, [onReady]);
 
   // Local/Bot result sound observer
   useEffect(() => {
@@ -509,7 +517,7 @@ export default function ConnectFourGame({
     })
       .then((bestMove) => {
         if (!abortController.signal.aborted && bestMove >= 0) {
-          executeMove(bestMove);
+          executeMoveRef.current(bestMove);
         }
       })
       .catch((err) => {
@@ -523,13 +531,13 @@ export default function ConnectFourGame({
     };
   }, [
     inModeSelection,
-    sessionConfig,
+    sessionConfig.mode,
+    sessionConfig.difficulty,
     state.status,
     state.currentPlayer,
     state.board,
     state.columnCounts,
     activeDrop,
-    executeMove,
   ]);
 
   const handleColumnClick = (column: number) => {

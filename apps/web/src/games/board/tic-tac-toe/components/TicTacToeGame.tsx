@@ -231,17 +231,25 @@ export default function TicTacToeGame({
     online.exitMatch();
   }, [online]);
 
+  const startFreshMatchRef = useRef(startFreshMatch);
+  useEffect(() => {
+    startFreshMatchRef.current = startFreshMatch;
+  });
+
   // Connect platform pause/restart controller
   useEffect(() => {
     const controller: IGameController = {
-      restart: startFreshMatch,
+      restart: () => startFreshMatchRef.current(),
     };
     onReady(controller);
+  }, [onReady]);
 
+  // Clean up any in-flight bot request strictly on cartridge unmount
+  useEffect(() => {
     return () => {
       botAbortControllerRef.current?.abort();
     };
-  }, [startFreshMatch, onReady]);
+  }, []);
 
   // Synchronize local / bot game over to external platform callbacks
   useEffect(() => {
@@ -353,7 +361,14 @@ export default function TicTacToeGame({
     return () => {
       abortController.abort();
     };
-  }, [inModeSelection, sessionConfig, state.status, state.currentPlayer, state.board]);
+  }, [
+    inModeSelection,
+    sessionConfig.mode,
+    sessionConfig.difficulty,
+    state.status,
+    state.currentPlayer,
+    state.board,
+  ]);
 
   const handleCellClick = (index: number) => {
     if (inModeSelection || isGameOver) return;

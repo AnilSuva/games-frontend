@@ -9,6 +9,11 @@ import {
 } from "../src/games/board/tic-tac-toe/logic/reducer.ts";
 import { findBestMove } from "../src/games/board/tic-tac-toe/bot/minimax.ts";
 import { getBotMoveByDifficulty } from "../src/games/board/tic-tac-toe/bot/difficulty.ts";
+import { requestBotMove } from "../src/games/board/tic-tac-toe/bot/botService.ts";
+import {
+  consumeStartingPlayer,
+  resetStartingPlayer,
+} from "../src/games/common/startingPlayer.ts";
 
 test("Initialization: creates correct starting state", () => {
   const state = createInitialState();
@@ -383,3 +388,133 @@ test("Bot Difficulty: All difficulties complete matches legally without infinite
     assert.ok(state.status === "won" || state.status === "draw", `${diff} game must terminate in win or draw`);
   }
 });
+
+test("Bot Service: bot responds after human move", async () => {
+  let state = createInitialState("X");
+  assert.equal(state.currentPlayer, "X");
+
+  // Human plays cell 4
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 4 });
+  assert.equal(state.currentPlayer, "O");
+  assert.equal(state.status, "in_progress");
+
+  // Bot calculates move
+  const botMove = await requestBotMove(state.board, "O", { difficulty: "medium", delayMs: 10 });
+  assert.ok(botMove >= 0 && botMove <= 8, `Bot move ${botMove} must be within board bounds`);
+  assert.notEqual(botMove, 4, "Bot must not play already occupied cell");
+
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: botMove });
+  assert.equal(state.board[botMove], "O");
+  assert.equal(state.currentPlayer, "X");
+  assert.equal(state.moveCount, 2);
+});
+
+test("Bot Service: bot first move when Blue starts", async () => {
+  // Blue starts -> player O
+  let state = createInitialState("O");
+  assert.equal(state.currentPlayer, "O");
+  assert.equal(state.status, "in_progress");
+
+  const botMove = await requestBotMove(state.board, "O", { difficulty: "hard", delayMs: 10 });
+  assert.ok(botMove >= 0 && botMove <= 8, `Bot first move ${botMove} must be valid cell`);
+
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: botMove });
+  assert.equal(state.board[botMove], "O");
+  assert.equal(state.currentPlayer, "X");
+  assert.equal(state.moveCount, 1);
+});
+
+test("Bot Service: all three difficulties return legal moves", async () => {
+  const difficulties = ["easy", "medium", "hard"];
+  const testBoard = [
+    "X", "X", null,
+    "O", null, null,
+    null, null, null,
+  ];
+
+  for (const diff of difficulties) {
+    const move = await requestBotMove(testBoard, "O", { difficulty: diff, delayMs: 5 });
+    assert.ok(isValidMove(testBoard, move), `Difficulty ${diff} must return a legal move`);
+  }
+
+  // Hard must block threat at cell 2
+  const hardMove = await requestBotMove(testBoard, "O", { difficulty: "hard", delayMs: 0 });
+  assert.equal(hardMove, 2, "Hard bot must block immediate winning threat at cell 2");
+});
+
+test("Bot Service: no move after game over and cancellation on match finish", async () => {
+  // X wins on top row
+  let state = createInitialState("X");
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 0 }); // X
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 3 }); // O
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 1 }); // X
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 4 }); // O
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 2 }); // X wins!
+
+  assert.equal(state.status, "won");
+  assert.equal(state.winner, "X");
+
+  // Attempt to apply a bot move to reducer after game over
+  const unchangedState = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 5 });
+  assert.strictEqual(unchangedState, state, "Reducer must reject any moves once game is over");
+
+  // In-flight bot calculation aborted with AbortController
+  const ac = new AbortController();
+  const botPromise = requestBotMove(state.board, "O", { difficulty: "medium", delayMs: 50, signal: ac.signal });
+  ac.abort();
+
+  await assert.rejects(
+    botPromise,
+    (err) => err.name === "AbortError",
+    "Aborted bot calculation must reject with AbortError"
+  );
+});
+
+test("Bot Service: exactly one response per human move and no duplicate moves", async () => {
+  let state = createInitialState("X");
+  let botMovesCount = 0;
+
+  // Turn 1: Human moves
+  state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: 4 });
+  assert.equal(state.currentPlayer, "O");
+
+  // Bot makes exactly one move
+  if (state.currentPlayer === "O" && state.status === "in_progress") {
+    const move = await requestBotMove(state.board, "O", { difficulty: "medium", delayMs: 10 });
+    state = ticTacToeReducer(state, { type: "MAKE_MOVE", cellIndex: move });
+    botMovesCount++;
+  }
+  assert.equal(botMovesCount, 1);
+  assert.equal(state.currentPlayer, "X");
+
+  // Attempting second bot move without human move fails condition
+  assert.notEqual(state.currentPlayer, "O");
+});
+
+test("Bot Service: Play Again resets bot correctly and rotates starting player", async () => {
+  resetStartingPlayer("tic-tac-toe");
+
+  // Match 1: starter is orange -> X starts (human)
+  const starter1 = consumeStartingPlayer("tic-tac-toe");
+  assert.equal(starter1, "orange");
+  let state1 = createInitialState(starter1 === "orange" ? "X" : "O");
+  assert.equal(state1.currentPlayer, "X");
+
+  // Simulate human move then game end
+  state1 = ticTacToeReducer(state1, { type: "MAKE_MOVE", cellIndex: 0 });
+
+  // Play Again: starter rotates to blue -> O starts (bot)
+  const starter2 = consumeStartingPlayer("tic-tac-toe");
+  assert.equal(starter2, "blue");
+  let state2 = createInitialState(starter2 === "orange" ? "X" : "O");
+  assert.equal(state2.currentPlayer, "O");
+  assert.equal(state2.status, "in_progress");
+  assert.equal(state2.moveCount, 0);
+
+  // Bot immediately plays first move
+  const firstMove = await requestBotMove(state2.board, "O", { difficulty: "medium", delayMs: 10 });
+  state2 = ticTacToeReducer(state2, { type: "MAKE_MOVE", cellIndex: firstMove });
+  assert.equal(state2.currentPlayer, "X");
+  assert.equal(state2.moveCount, 1);
+});
+

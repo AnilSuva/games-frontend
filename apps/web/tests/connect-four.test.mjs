@@ -17,7 +17,11 @@ import {
 } from "../src/games/board/connect-four/logic/reducer.ts";
 import { findBestMove } from "../src/games/board/connect-four/bot/minimax.ts";
 import { getBotMoveByDifficulty } from "../src/games/board/connect-four/bot/difficulty.ts";
-import { requestBotMove } from "../src/games/board/connect-four/bot/botService.ts";
+import { requestBotMove, terminateBotWorker } from "../src/games/board/connect-four/bot/botService.ts";
+import {
+  consumeStartingPlayer,
+  resetStartingPlayer,
+} from "../src/games/common/startingPlayer.ts";
 import {
   calculateRowGeometry,
   createInitialDropPhysics,
@@ -466,7 +470,7 @@ test("Drop System: stack increments landing row from row 5 up to row 0", () => {
 
   // Column is now full: landing row must be null / -1
   assert.equal(getLandingRow(state.columnCounts, targetCol), -1);
-  assert.equal(isValidColumn(state.columnCounts, targetCol), false);
+  assert.equal(isColumnFull(state.columnCounts, targetCol), true);
 });
 
 test("Drop System: duplicate move prevention during active drop", () => {
@@ -577,4 +581,280 @@ test("Drop System: reset cleanly cancels in-flight drop state", () => {
   assert.equal(resetState.moveCount, 0);
   assert.equal(resetState.status, "in_progress");
   assert.equal(resetState.currentPlayer, "R");
+});
+
+test("Bot Service: bot responds after human move", async () => {
+  let state = createInitialState("R");
+  assert.equal(state.currentPlayer, "R");
+
+  // Human drops in column 3
+  state = connectFourReducer(state, { type: "DROP", column: 3 });
+  assert.equal(state.currentPlayer, "Y");
+  assert.equal(state.status, "in_progress");
+
+  // Bot computes response
+  const botCol = await requestBotMove(state.board, state.columnCounts, "Y", {
+    difficulty: "medium",
+    delayMs: 10,
+  });
+
+  assert.ok(isValidColumn(botCol), `Bot move ${botCol} must be a valid column`);
+  assert.ok(!isColumnFull(state.columnCounts, botCol), "Bot column must not be full");
+
+  state = connectFourReducer(state, { type: "DROP", column: botCol });
+  assert.equal(state.currentPlayer, "R");
+  assert.equal(state.moveCount, 2);
+});
+
+test("Bot Service: bot first move when Blue starts", async () => {
+  // Blue starts -> player Y
+  let state = createInitialState("Y");
+  assert.equal(state.currentPlayer, "Y");
+  assert.equal(state.status, "in_progress");
+
+  const botCol = await requestBotMove(state.board, state.columnCounts, "Y", {
+    difficulty: "hard",
+    delayMs: 10,
+  });
+
+  assert.ok(isValidColumn(botCol), `Bot first move ${botCol} must be a valid column`);
+  assert.ok(!isColumnFull(state.columnCounts, botCol));
+
+  state = connectFourReducer(state, { type: "DROP", column: botCol });
+  assert.equal(state.currentPlayer, "R");
+  assert.equal(state.moveCount, 1);
+});
+
+test("Bot Service: all three difficulties return valid columns and tactical choices", async () => {
+  let state = createInitialState("R");
+  // Set up 3 in a row for Y in bottom row: cols 0, 1, 2
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // R in col 0
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // Y in col 0 (row 4)
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // R in col 1
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // Y in col 1 (row 4)
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // R in col 2
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // Y in col 2 (row 4)
+
+  const difficulties = ["easy", "medium", "hard"];
+  for (const diff of difficulties) {
+    const move = await requestBotMove(state.board, state.columnCounts, "Y", {
+      difficulty: diff,
+      delayMs: 5,
+    });
+    assert.ok(isValidColumn(move) && !isColumnFull(state.columnCounts, move), `${diff} must return a legal column`);
+  }
+
+  // Medium and Hard should take winning move at col 3 (row 4)
+  const mediumMove = await requestBotMove(state.board, state.columnCounts, "Y", {
+    difficulty: "medium",
+    delayMs: 0,
+  });
+  assert.equal(mediumMove, 3, "Medium bot must take immediate winning column 3");
+
+  const hardMove = await requestBotMove(state.board, state.columnCounts, "Y", {
+    difficulty: "hard",
+    delayMs: 0,
+  });
+  assert.equal(hardMove, 3, "Hard bot must take immediate winning column 3");
+});
+
+test("Bot Service: worker response accepted correctly and worker cleanup", async () => {
+  // Mock Worker to verify worker-based message communication
+  class MockWorker {
+    constructor() {
+      this.listeners = {};
+    }
+    addEventListener(type, cb) {
+      (this.listeners[type] ||= []).push(cb);
+    }
+    removeEventListener(type, cb) {
+      this.listeners[type] = (this.listeners[type] || []).filter((fn) => fn !== cb);
+    }
+    postMessage(data) {
+      // Simulate worker asynchronous calculation response
+      setTimeout(() => {
+        const handlers = this.listeners["message"] || [];
+        handlers.forEach((h) => h({ data: { id: data.id, move: 3 } }));
+      }, 5);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+  }
+
+  const originalWindow = globalThis.window;
+  const originalWorker = globalThis.Worker;
+
+  try {
+    globalThis.window = globalThis;
+    globalThis.Worker = MockWorker;
+    terminateBotWorker(); // ensure fresh worker instance
+
+    const state = createInitialState("Y");
+    const move = await requestBotMove(state.board, state.columnCounts, "Y", {
+      difficulty: "medium",
+      delayMs: 0,
+    });
+
+    assert.equal(move, 3, "Worker response move must be accepted and resolved correctly");
+  } finally {
+    terminateBotWorker();
+    if (originalWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+    if (originalWorker === undefined) {
+      delete globalThis.Worker;
+    } else {
+      globalThis.Worker = originalWorker;
+    }
+  }
+});
+
+test("Bot Service: worker cancellation and AbortController cleanup", async () => {
+  class SlowMockWorker {
+    constructor() {
+      this.listeners = {};
+    }
+    addEventListener(type, cb) {
+      (this.listeners[type] ||= []).push(cb);
+    }
+    removeEventListener(type, cb) {
+      this.listeners[type] = (this.listeners[type] || []).filter((fn) => fn !== cb);
+    }
+    postMessage() {
+      // Intentionally slow response
+    }
+    terminate() {
+      this.terminated = true;
+    }
+  }
+
+  const originalWindow = globalThis.window;
+  const originalWorker = globalThis.Worker;
+
+  try {
+    globalThis.window = globalThis;
+    globalThis.Worker = SlowMockWorker;
+    terminateBotWorker();
+
+    const ac = new AbortController();
+    const state = createInitialState("Y");
+
+    const movePromise = requestBotMove(state.board, state.columnCounts, "Y", {
+      difficulty: "hard",
+      delayMs: 50,
+      signal: ac.signal,
+    });
+
+    // Abort calculation immediately
+    ac.abort();
+
+    await assert.rejects(
+      movePromise,
+      (err) => err.name === "AbortError",
+      "Aborted worker calculation must reject with AbortError"
+    );
+  } finally {
+    terminateBotWorker();
+    if (originalWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+    if (originalWorker === undefined) {
+      delete globalThis.Worker;
+    } else {
+      globalThis.Worker = originalWorker;
+    }
+  }
+});
+
+test("Bot Service: no move after game over and rejection of post-game moves", async () => {
+  // Create a 4-in-a-row win for Orange in bottom row
+  let state = createInitialState("R");
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 0 }); // Y
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 1 }); // Y
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // R
+  state = connectFourReducer(state, { type: "DROP", column: 2 }); // Y
+  state = connectFourReducer(state, { type: "DROP", column: 3 }); // R wins!
+
+  assert.equal(state.status, "won");
+  assert.equal(state.winner, "R");
+
+  // Attempt to apply a bot move after game is won
+  const unchangedState = connectFourReducer(state, { type: "DROP", column: 4 });
+  assert.strictEqual(unchangedState, state, "Reducer must reject moves once match is won");
+
+  // Cancellation via AbortSignal when match finishes
+  const ac = new AbortController();
+  const botPromise = requestBotMove(state.board, state.columnCounts, "Y", {
+    difficulty: "medium",
+    delayMs: 50,
+    signal: ac.signal,
+  });
+  ac.abort();
+
+  await assert.rejects(
+    botPromise,
+    (err) => err.name === "AbortError",
+    "Cancelled bot promise must reject with AbortError"
+  );
+});
+
+test("Bot Service: exactly one response per human move and full-column handling", async () => {
+  let state = createInitialState("R");
+  let botMovesCount = 0;
+
+  // Turn 1: Human moves in col 3
+  state = connectFourReducer(state, { type: "DROP", column: 3 });
+  assert.equal(state.currentPlayer, "Y");
+
+  // Bot makes exactly one move
+  if (state.currentPlayer === "Y" && state.status === "in_progress") {
+    const move = await requestBotMove(state.board, state.columnCounts, "Y", {
+      difficulty: "medium",
+      delayMs: 10,
+    });
+    assert.ok(isValidColumn(move) && !isColumnFull(state.columnCounts, move));
+    state = connectFourReducer(state, { type: "DROP", column: move });
+    botMovesCount++;
+  }
+
+  assert.equal(botMovesCount, 1);
+  assert.equal(state.currentPlayer, "R");
+
+  // Bot cannot move again during human turn
+  assert.notEqual(state.currentPlayer, "Y");
+});
+
+test("Bot Service: Play Again resets bot correctly and preserves rotation", async () => {
+  resetStartingPlayer("connect-four");
+
+  // Match 1: starter is orange -> R starts (human)
+  const starter1 = consumeStartingPlayer("connect-four");
+  assert.equal(starter1, "orange");
+  let state1 = createInitialState(starter1 === "orange" ? "R" : "Y");
+  assert.equal(state1.currentPlayer, "R");
+
+  // Play Again: starter rotates to blue -> Y starts (bot)
+  const starter2 = consumeStartingPlayer("connect-four");
+  assert.equal(starter2, "blue");
+  let state2 = createInitialState(starter2 === "orange" ? "R" : "Y");
+  assert.equal(state2.currentPlayer, "Y");
+  assert.equal(state2.status, "in_progress");
+  assert.equal(state2.moveCount, 0);
+
+  // Bot makes first move cleanly
+  const firstMove = await requestBotMove(state2.board, state2.columnCounts, "Y", {
+    difficulty: "medium",
+    delayMs: 10,
+  });
+  assert.ok(isValidColumn(firstMove) && !isColumnFull(state2.columnCounts, firstMove));
+  state2 = connectFourReducer(state2, { type: "DROP", column: firstMove });
+  assert.equal(state2.currentPlayer, "R");
+  assert.equal(state2.moveCount, 1);
 });
