@@ -19,13 +19,15 @@ export interface ServerConfig {
 }
 
 function getLocalNetworkOrigins(): string[] {
-  const origins: string[] = ["http://172.30.208.1:3000"];
+  const origins: string[] = [];
   try {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
       for (const net of interfaces[name] ?? []) {
-        if (net.family === "IPv4" && !net.internal) {
+        if ((net.family === "IPv4" || (net.family as unknown) === 4) && !net.internal) {
           origins.push(`http://${net.address}:3000`);
+          origins.push(`https://${net.address}:3000`);
+          origins.push(`http://${net.address}:3001`);
         }
       }
     }
@@ -38,7 +40,6 @@ function getLocalNetworkOrigins(): string[] {
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
-  "http://172.30.208.1:3000",
   "https://games.anilsuva.com",
   ...getLocalNetworkOrigins(),
 ];

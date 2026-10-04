@@ -8,7 +8,8 @@
   "scripts": {
     "dev:web": "npm run dev -w web",
     "dev:server": "npm run dev -w server",
-    "dev": "npm run dev -w web",
+    "dev:all": "node scripts/dev.mjs",
+    "dev": "node scripts/dev.mjs",
     "build:web": "npm run build -w web",
     "build:server": "npm run build -w server",
     "build": "npm run build --workspaces --if-present",

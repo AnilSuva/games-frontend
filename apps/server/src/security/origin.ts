@@ -10,6 +10,10 @@ export function isOriginAllowed(
     return allowMissingOrigin;
   }
 
+  if (allowedOrigins.some((allowed) => allowed.trim() === "*")) {
+    return true;
+  }
+
   const normalizedOrigin = origin.trim().replace(/\/+$/, "").toLowerCase();
 
   return allowedOrigins.some((allowed) => {
