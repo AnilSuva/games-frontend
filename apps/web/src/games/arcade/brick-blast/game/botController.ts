@@ -1,6 +1,12 @@
 import type { Ball } from "./types";
+import type { PlatformPlayer } from "@/games/common/startingPlayer";
 
 export type BotDifficulty = "easy" | "medium" | "hard";
+
+export interface BotControllerOptions {
+  difficulty: BotDifficulty;
+  controlledPaddle?: PlatformPlayer;
+}
 
 type BotTuning = {
   decisionInterval: number;
@@ -37,20 +43,38 @@ export function predictWallReflectedX(
   return left + (unfolded <= span ? unfolded : period - unfolded);
 }
 
-export function getBallTimeToPaddle(ball: Ball, paddleY: number): number {
-  if (!ball.active || ball.vy >= 0) return Number.POSITIVE_INFINITY;
-  const contactY = paddleY + 5 + ball.radius;
-  const time = (ball.y - contactY) / -ball.vy;
-  return time >= 0 ? time : Number.POSITIVE_INFINITY;
+export function getBallTimeToPaddle(
+  ball: Ball,
+  paddleY: number,
+  paddleSide: PlatformPlayer = "blue"
+): number {
+  if (!ball.active) return Number.POSITIVE_INFINITY;
+  if (paddleSide === "orange") {
+    // Bottom paddle (Host side): Ball must be moving downward (vy > 0)
+    if (ball.vy <= 0) return Number.POSITIVE_INFINITY;
+    const contactY = paddleY - 5 - ball.radius;
+    const time = (contactY - ball.y) / ball.vy;
+    return time >= 0 ? time : Number.POSITIVE_INFINITY;
+  } else {
+    // Top paddle (Guest side): Ball must be moving upward (vy < 0)
+    if (ball.vy >= 0) return Number.POSITIVE_INFINITY;
+    const contactY = paddleY + 5 + ball.radius;
+    const time = (ball.y - contactY) / -ball.vy;
+    return time >= 0 ? time : Number.POSITIVE_INFINITY;
+  }
 }
 
-export function selectThreateningBall(balls: Ball[], paddleY: number): Ball | null {
+export function selectThreateningBall(
+  balls: Ball[],
+  paddleY: number,
+  paddleSide: PlatformPlayer = "blue"
+): Ball | null {
   let target: Ball | null = null;
   let shortestTime = Number.POSITIVE_INFINITY;
   for (let i = 0; i < balls.length; i++) {
     const ball = balls[i];
     if (!ball) continue;
-    const time = getBallTimeToPaddle(ball, paddleY);
+    const time = getBallTimeToPaddle(ball, paddleY, paddleSide);
     if (time < shortestTime) {
       shortestTime = time;
       target = ball;
@@ -63,6 +87,7 @@ export function selectThreateningBall(balls: Ball[], paddleY: number): Ball | nu
 export class BrickBlastBotController {
   private readonly tuning: BotTuning;
   private readonly difficulty: BotDifficulty;
+  private readonly controlledPaddle: PlatformPlayer;
   private decisionTimer = 0;
   private reactionTimer = 0;
   private targetId = -1;
@@ -70,9 +95,19 @@ export class BrickBlastBotController {
   private paddleVelocity = 0;
   private decisionCount = 0;
 
-  constructor(difficulty: BotDifficulty) {
-    this.difficulty = difficulty;
-    this.tuning = TUNING[difficulty];
+  constructor(difficultyOrOptions: BotDifficulty | BotControllerOptions) {
+    if (typeof difficultyOrOptions === "string") {
+      this.difficulty = difficultyOrOptions;
+      this.controlledPaddle = "blue";
+    } else {
+      this.difficulty = difficultyOrOptions.difficulty;
+      this.controlledPaddle = difficultyOrOptions.controlledPaddle ?? "blue";
+    }
+    this.tuning = TUNING[this.difficulty];
+  }
+
+  public get controlledPaddleId(): PlatformPlayer {
+    return this.controlledPaddle;
   }
 
   reset(paddleX = 180): void {
@@ -116,7 +151,7 @@ export class BrickBlastBotController {
   }
 
   private chooseTarget(balls: Ball[], paddleWidth: number, paddleY: number, gameWidth: number): void {
-    const target = selectThreateningBall(balls, paddleY);
+    const target = selectThreateningBall(balls, paddleY, this.controlledPaddle);
     if (!target) {
       this.targetId = -1;
       this.targetX = clampBotTarget(gameWidth / 2, paddleWidth, gameWidth);
@@ -128,12 +163,12 @@ export class BrickBlastBotController {
     }
     if (this.reactionTimer > 0) return;
 
-    const time = getBallTimeToPaddle(target, paddleY);
+    const time = getBallTimeToPaddle(target, paddleY, this.controlledPaddle);
     let predictedX = predictWallReflectedX(target.x, target.vx, time, target.radius, gameWidth);
     this.decisionCount++;
     // Repeatable, bounded error keeps all levels imperfect without frame-to-frame noise.
     const phase = (target.id * 17 + this.decisionCount * 7) % 11 - 5;
-    predictedX += phase * this.tuning.predictionError / 5;
+    predictedX += (phase * this.tuning.predictionError) / 5;
     // Easy occasionally favors the next incoming ball for a short decision interval.
     if (this.difficulty === "easy" && balls.length > 1 && this.decisionCount % 7 === 0) {
       let next: Ball | null = null;
@@ -141,8 +176,11 @@ export class BrickBlastBotController {
       for (let i = 0; i < balls.length; i++) {
         const ball = balls[i];
         if (!ball || ball.id === target.id) continue;
-        const eta = getBallTimeToPaddle(ball, paddleY);
-        if (eta < nextTime) { next = ball; nextTime = eta; }
+        const eta = getBallTimeToPaddle(ball, paddleY, this.controlledPaddle);
+        if (eta < nextTime) {
+          next = ball;
+          nextTime = eta;
+        }
       }
       if (next) predictedX = predictWallReflectedX(next.x, next.vx, nextTime, next.radius, gameWidth);
     }

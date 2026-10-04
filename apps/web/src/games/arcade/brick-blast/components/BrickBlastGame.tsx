@@ -64,6 +64,7 @@ export default function BrickBlastGame({
   const [inModeSelection, setInModeSelection] = useState<boolean>(true);
   const [selectedMode, setSelectedMode] = useState<BrickBlastGameMode>("1v1");
   const [botDifficulty, setBotDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [botPaddle] = useState<PlatformPlayer>("blue");
   const [isPopupDismissed, setIsPopupDismissed] = useState<boolean>(false);
   const [gameOverResult, setGameOverResult] = useState<{
     winner: PlatformPlayer;
@@ -72,6 +73,26 @@ export default function BrickBlastGame({
 
   // Online multiplayer integration
   const online = useOnlineBrickBlast();
+
+  const onlineRef = useRef(online);
+  useEffect(() => {
+    onlineRef.current = online;
+  });
+
+  const callbacksRef = useRef({
+    onGameOver,
+    onScoreUpdate,
+    onReady,
+    onLifecycleChange,
+  });
+  useEffect(() => {
+    callbacksRef.current = {
+      onGameOver,
+      onScoreUpdate,
+      onReady,
+      onLifecycleChange,
+    };
+  });
 
   useEffect(() => {
     onLifecycleChange?.("pre-game");
@@ -219,10 +240,10 @@ export default function BrickBlastGame({
     resultSoundGuardRef.current.reset();
     setIsPopupDismissed(false);
     setGameOverResult(null);
-    sceneRef.current?.restartMatch(nextStarter, selectedMode, botDifficulty);
+    sceneRef.current?.restartMatch(nextStarter, selectedMode, botDifficulty, undefined, botPaddle);
     onLifecycleChange?.("playing");
     onScoreUpdate?.(0);
-  }, [botDifficulty, onLifecycleChange, onScoreUpdate, online, selectedMode]);
+  }, [botDifficulty, botPaddle, onLifecycleChange, onScoreUpdate, online, selectedMode]);
 
   useEffect(() => {
     handleRestartRef.current = handleRestart;
@@ -263,7 +284,7 @@ export default function BrickBlastGame({
 
       const startingPlayer =
         selectedMode === "online"
-          ? online.gameState?.startingPlayer || "orange"
+          ? onlineRef.current.gameState?.startingPlayer || "orange"
           : consumeStartingPlayer("brick-blast");
 
       const config: Phaser.Types.Core.GameConfig = {
@@ -292,18 +313,21 @@ export default function BrickBlastGame({
           startingPlayer,
           mode: selectedMode,
           difficulty: botDifficulty,
+          botPaddle,
           online:
             selectedMode === "online"
               ? {
-                  sendInput: online.sendInput,
-                  sendGameEvent: online.sendGameEvent,
-                  myRole: online.myRole ?? "orange",
+                  sendInput: (input: string, data?: unknown) =>
+                    onlineRef.current.sendInput(input, data as Parameters<typeof onlineRef.current.sendInput>[1]),
+                  sendGameEvent: (event: string, data?: unknown) =>
+                    onlineRef.current.sendGameEvent(event, data as Parameters<typeof onlineRef.current.sendGameEvent>[1]),
+                  myRole: onlineRef.current.myRole ?? "orange",
                 }
               : undefined,
           callbacks: {
             onScoreUpdate: (score: number) => {
               if (!isMounted) return;
-              onScoreUpdate?.(score);
+              callbacksRef.current.onScoreUpdate?.(score);
             },
             onLevelChange: () => {
               // Level transitions are handled internally in Phaser
@@ -312,18 +336,20 @@ export default function BrickBlastGame({
               if (!isMounted) return;
 
               if (selectedMode !== "online") {
+                const humanPlayer: PlatformPlayer =
+                  selectedMode === "vs-bot" && botPaddle === "orange" ? "blue" : "orange";
                 const resultSound = resultSoundGuardRef.current.claim(
                   getResultSound({
                     mode: selectedMode,
                     winner: result.winner,
-                    humanPlayer: "orange",
+                    humanPlayer,
                   })
                 );
                 if (resultSound === "victory") soundManager.playVictory();
                 if (resultSound === "lose") soundManager.playLose();
 
                 setGameOverResult(result);
-                onGameOver({
+                callbacksRef.current.onGameOver({
                   winner: result.winner === "orange" ? "Orange" : "Blue",
                   score: result.score,
                   details: {
@@ -334,14 +360,18 @@ export default function BrickBlastGame({
                 });
               }
             },
-            onLifecycleChange,
+            onLifecycleChange: (status: "playing" | "paused" | "finished") => {
+              if (status === "playing" || status === "finished") {
+                callbacksRef.current.onLifecycleChange?.(status);
+              }
+            },
           },
         }) as import("../game/BrickBlastScene").BrickBlastScene;
 
         sceneRef.current = scene;
 
         if (selectedMode === "online") {
-          online.setRemoteHandlers({
+          onlineRef.current.setRemoteHandlers({
             onRemoteInput: (data) => scene.handleRemoteInput(data),
             onRemoteEvent: (data) => scene.handleRemoteEvent(data),
           });
@@ -357,7 +387,7 @@ export default function BrickBlastGame({
           },
         };
 
-        onReady(controller);
+        callbacksRef.current.onReady(controller);
       });
     }
 
@@ -376,11 +406,7 @@ export default function BrickBlastGame({
     isOnlineLobby,
     selectedMode,
     botDifficulty,
-    online,
-    onGameOver,
-    onLifecycleChange,
-    onReady,
-    onScoreUpdate,
+    botPaddle,
   ]);
 
   // Mode Selection Overlay

@@ -20,6 +20,7 @@ import {
   clampBotTarget,
   predictWallReflectedX,
   selectThreateningBall,
+  getBallTimeToPaddle,
 } from "../src/games/arcade/brick-blast/game/botController.ts";
 
 const botBall = (id, { x = 180, y = 300, vx = 0, vy = -200, radius = 6, active = true } = {}) =>
@@ -437,3 +438,143 @@ test("Multi-Touch Controls: standards-based pointerId tracking with activePointe
   assert.equal(bluePaddleX, 310);
   assert.equal(orangePaddleX, 80); // Orange stays at 80
 });
+
+test("Bot targeting for Host paddle (Orange, bottom): selects downward-moving balls with shortest ETA", () => {
+  const hostPaddleY = 534;
+  const downwardFar = botBall(1, { y: 200, vy: 150 });
+  const downwardImminent = botBall(2, { y: 400, vy: 300 });
+  const upwardMovingAway = botBall(3, { y: 350, vy: -200 });
+
+  assert.equal(
+    selectThreateningBall([downwardFar, upwardMovingAway, downwardImminent], hostPaddleY, "orange"),
+    downwardImminent
+  );
+  assert.equal(getBallTimeToPaddle(upwardMovingAway, hostPaddleY, "orange"), Number.POSITIVE_INFINITY);
+  assert.ok(
+    getBallTimeToPaddle(downwardImminent, hostPaddleY, "orange") <
+      getBallTimeToPaddle(downwardFar, hostPaddleY, "orange")
+  );
+});
+
+test("Bot controller on Host side: tracks downward incoming balls and moves smoothly toward them", () => {
+  const hostBot = new BrickBlastBotController({ difficulty: "medium", controlledPaddle: "orange" });
+  assert.equal(hostBot.controlledPaddleId, "orange");
+
+  const incomingBall = botBall(10, { x: 300, y: 200, vx: 50, vy: 250 });
+  let hostPaddleX = 180;
+  for (let frame = 0; frame < 60; frame++) {
+    hostPaddleX = hostBot.update([incomingBall], hostPaddleX, 72, 534, 360, 1 / 60);
+  }
+  // Host paddle must have moved rightward toward the incoming ball
+  assert.ok(hostPaddleX > 180, "Host paddle should move toward the ball");
+  assert.ok(hostPaddleX <= 360 - 36, "Host paddle should not exceed boundaries");
+});
+
+test("Bot controller on Guest side: tracks upward incoming balls", () => {
+  const guestBot = new BrickBlastBotController({ difficulty: "medium", controlledPaddle: "blue" });
+  assert.equal(guestBot.controlledPaddleId, "blue");
+
+  const incomingBall = botBall(20, { x: 80, y: 300, vx: -30, vy: -250 });
+  let guestPaddleX = 180;
+  for (let frame = 0; frame < 60; frame++) {
+    guestPaddleX = guestBot.update([incomingBall], guestPaddleX, 72, 46, 360, 1 / 60);
+  }
+  assert.ok(guestPaddleX < 180, "Guest paddle should move leftward toward the ball");
+  assert.ok(guestPaddleX >= 36, "Guest paddle should not exceed boundaries");
+});
+
+test("Paddle Ownership: Host Bot mode strictly prevents human inputs from modifying bot-controlled host paddle", () => {
+  // Simulate the exact input and ownership architecture in BrickBlastScene
+  const mode = "vs-bot";
+  const botPaddle = "orange";
+  const controlledHumanPaddle = botPaddle === "orange" ? "blue" : "orange";
+
+  let orangePaddleX = 180; // Host (Bot)
+  let bluePaddleX = 180;   // Guest (Human)
+  const activePointers = new Map();
+
+  function handlePointerDown(e) {
+    const clampedX = Math.max(36, Math.min(324, e.x));
+    if (mode === "vs-bot") {
+      activePointers.set(e.pointerId, controlledHumanPaddle);
+      if (controlledHumanPaddle === "orange") {
+        orangePaddleX = clampedX;
+      } else {
+        bluePaddleX = clampedX;
+      }
+      return;
+    }
+  }
+
+  function handlePointerMove(e) {
+    let target = activePointers.get(e.pointerId);
+    if (mode === "vs-bot") {
+      target = controlledHumanPaddle;
+      activePointers.set(e.pointerId, target);
+    }
+    if (!target) return;
+    if (mode === "vs-bot" && target === botPaddle) return;
+
+    const clampedX = Math.max(36, Math.min(324, e.x));
+    if (target === "orange") {
+      orangePaddleX = clampedX;
+    } else if (target === "blue") {
+      bluePaddleX = clampedX;
+    }
+  }
+
+  // Initial state: Both paddles at center
+  assert.equal(orangePaddleX, 180);
+  assert.equal(bluePaddleX, 180);
+
+  // Human touches screen (even in bottom half where host paddle is)
+  handlePointerDown({ pointerId: 1, x: 280, y: 500 });
+  // Must update human paddle (blue), NOT bot paddle (orange)
+  assert.equal(bluePaddleX, 280);
+  assert.equal(orangePaddleX, 180, "Bot-controlled orange paddle must not be affected by pointer down");
+
+  // Human drags across the screen
+  handlePointerMove({ pointerId: 1, x: 60, y: 510 });
+  assert.equal(bluePaddleX, 60);
+  assert.equal(orangePaddleX, 180, "Bot-controlled orange paddle must not mirror human pointer movement");
+
+  // Bot updates on its own tick
+  const hostBot = new BrickBlastBotController({ difficulty: "medium", controlledPaddle: "orange" });
+  orangePaddleX = hostBot.update([], orangePaddleX, 72, 534, 360, 0.05);
+  // Human moves again
+  handlePointerMove({ pointerId: 1, x: 300, y: 520 });
+  assert.equal(bluePaddleX, 300);
+  assert.equal(orangePaddleX, 180, "Bot paddle remains independent when human moves");
+});
+
+test("Bot sustained activity: bot continues updating accurately over 300 consecutive frames (5 seconds)", () => {
+  const hostBot = new BrickBlastBotController({ difficulty: "hard", controlledPaddle: "orange" });
+  let paddleX = 180;
+  const ball = botBall(1, { x: 260, y: 200, vx: 20, vy: 150 });
+
+  for (let frame = 0; frame < 300; frame++) {
+    ball.x += ball.vx * (1 / 60);
+    ball.y += ball.vy * (1 / 60);
+    if (ball.x <= 10 || ball.x >= 350) ball.vx = -ball.vx;
+    if (ball.y >= 520) ball.vy = -ball.vy;
+    if (ball.y <= 60) ball.vy = -ball.vy;
+
+    paddleX = hostBot.update([ball], paddleX, 72, 534, 360, 1 / 60);
+  }
+
+  assert.ok(!Number.isNaN(paddleX));
+  assert.ok(paddleX >= 36 && paddleX <= 324);
+});
+
+test("Reset and rematch preserve bot paddle ownership", () => {
+  const hostBot = new BrickBlastBotController({ difficulty: "medium", controlledPaddle: "orange" });
+  assert.equal(hostBot.controlledPaddleId, "orange");
+  hostBot.reset(180);
+  assert.equal(hostBot.controlledPaddleId, "orange");
+
+  const guestBot = new BrickBlastBotController({ difficulty: "medium", controlledPaddle: "blue" });
+  assert.equal(guestBot.controlledPaddleId, "blue");
+  guestBot.reset(180);
+  assert.equal(guestBot.controlledPaddleId, "blue");
+});
+
