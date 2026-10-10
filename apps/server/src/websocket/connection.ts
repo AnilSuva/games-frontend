@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import type { WebSocket as WsWebSocket } from "ws";
-import { PROTOCOL_VERSION } from "../config/constants.js";
+import {
+  PROTOCOL_VERSION,
+  RATE_LIMIT_CAPACITY,
+  RATE_LIMIT_REFILL_PER_SEC,
+} from "../config/constants.js";
 import { TokenBucketRateLimiter } from "../security/rateLimit.js";
 import type { ErrorCode, ServerEnvelope } from "../types/index.js";
 
@@ -15,8 +19,8 @@ export class PlayerConnection {
 
   constructor(
     public readonly socket: WsWebSocket,
-    rateLimitCapacity: number = 30,
-    rateLimitRefillRate: number = 20
+    rateLimitCapacity: number = RATE_LIMIT_CAPACITY,
+    rateLimitRefillRate: number = RATE_LIMIT_REFILL_PER_SEC
   ) {
     this.connectionId = crypto.randomUUID();
     this.rateLimiter = new TokenBucketRateLimiter(rateLimitCapacity, rateLimitRefillRate);

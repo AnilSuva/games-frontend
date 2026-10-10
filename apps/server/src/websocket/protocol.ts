@@ -594,27 +594,44 @@ export async function handleClientMessage(
         connection.playerId
       );
 
+      const stateChanged = actionResult.nextState !== room.gameState;
       room.gameState = actionResult.nextState;
       const nextState = actionResult.nextState as { status?: string };
       if (nextState.status === "won" || nextState.status === "draw") {
         room.status = "completed";
       }
 
-      room.incrementVersion();
+      if (actionResult.events && actionResult.events.length > 0) {
+        for (const ev of actionResult.events) {
+          broadcastToRoom(
+            room,
+            {
+              version: PROTOCOL_VERSION,
+              type: "game.event",
+              payload: ev,
+            },
+            connectionTracker,
+            connection.playerId
+          );
+        }
+      }
 
-      broadcastToRoom<GameStatePayload>(
-        room,
-        {
-          version: PROTOCOL_VERSION,
-          type: "game.state",
-          payload: {
-            roomId: room.id,
-            version: room.version,
-            gameState: room.gameState,
+      if (stateChanged) {
+        room.incrementVersion();
+        broadcastToRoom<GameStatePayload>(
+          room,
+          {
+            version: PROTOCOL_VERSION,
+            type: "game.state",
+            payload: {
+              roomId: room.id,
+              version: room.version,
+              gameState: room.gameState,
+            },
           },
-        },
-        connectionTracker
-      );
+          connectionTracker
+        );
+      }
       break;
     }
   }

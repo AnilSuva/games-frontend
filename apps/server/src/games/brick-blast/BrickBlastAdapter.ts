@@ -106,6 +106,15 @@ export class BrickBlastAdapter
         };
       }
 
+      if (action.event === "ball_sync" || action.event === "brick_destroyed") {
+        if (role !== "orange") {
+          return {
+            valid: false,
+            error: "Only host can broadcast ball sync or brick destruction",
+          };
+        }
+      }
+
       return { valid: true };
     }
 
