@@ -24,6 +24,10 @@ export interface Ball {
   speedMultiplier: number;
   active: boolean;
   graphics: Phaser.GameObjects.Graphics;
+  targetX?: number;
+  targetY?: number;
+  targetVx?: number;
+  targetVy?: number;
 }
 
 export interface Paddle {

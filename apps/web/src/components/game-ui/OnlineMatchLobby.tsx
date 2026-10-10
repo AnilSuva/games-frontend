@@ -227,20 +227,18 @@ export function OnlineMatchLobby({
 
           <button
             type="submit"
-            disabled={
-              roomCodeInput.trim().length < 3 || isJoining || isConnecting
-            }
+            disabled={roomCodeInput.trim().length < 3 || isJoining}
             className="w-full min-h-[46px] py-2.5 px-4 text-sm font-semibold text-white bg-[#1c1917] sm:hover:bg-[#322f2c] active:bg-black disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-2"
           >
-            {isConnecting ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Connecting...</span>
-              </>
-            ) : isJoining ? (
+            {isJoining ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 <span>Joining room...</span>
+              </>
+            ) : isConnecting ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Connecting...</span>
               </>
             ) : (
               <span>Join Room</span>
@@ -294,18 +292,18 @@ export function OnlineMatchLobby({
             soundManager.play("buttonClick");
             onCreateRoom();
           }}
-          disabled={isConnecting || isCreating}
+          disabled={isCreating}
           className="w-full min-h-[46px] py-2.5 px-4 text-sm font-semibold text-white bg-[#1c1917] sm:hover:bg-[#322f2c] active:bg-black disabled:bg-[#d6d3cd] disabled:cursor-not-allowed rounded-xl transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-2"
         >
-          {isConnecting ? (
-            <>
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Connecting...</span>
-            </>
-          ) : isCreating ? (
+          {isCreating ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               <span>Creating room...</span>
+            </>
+          ) : isConnecting ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Connecting...</span>
             </>
           ) : (
             <span>Create Room</span>
@@ -318,7 +316,7 @@ export function OnlineMatchLobby({
             soundManager.play("buttonClick");
             setTab("join");
           }}
-          disabled={isConnecting || isCreating}
+          disabled={isCreating}
           className="w-full min-h-[46px] py-2.5 px-4 text-sm font-semibold bg-[#faf9f6] sm:hover:bg-[#f0eee9] active:bg-[#e7e4dc] border border-[#e6e3dc] sm:hover:border-[#1c1917] text-[#1c1917] disabled:bg-[#faf9f6] disabled:text-[#9c978e] disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer flex items-center justify-center"
         >
           Join Room

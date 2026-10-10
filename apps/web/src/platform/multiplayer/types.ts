@@ -47,7 +47,7 @@ export interface WinningLine {
   direction: "horizontal" | "vertical" | "diagonal";
 }
 
-export type ResultReason = "win" | "draw" | "disconnect_forfeit";
+export type ResultReason = "win" | "draw" | "disconnect_forfeit" | "timeout";
 
 export interface OnlineTicTacToeState {
   board: (PlayerMark | null)[];
@@ -115,6 +115,34 @@ export interface OnlineBrickBlastState {
   disconnectedPlayerId?: string | null;
   matchStartTime?: number;
   ballSeed?: number;
+}
+
+export type CheckersPlayer = "orange" | "blue";
+
+export interface CheckersLastMove {
+  from: number;
+  to: number;
+  isJump: boolean;
+  jumpedIndex?: number;
+}
+
+export interface OnlineCheckersState {
+  board: number[];
+  currentPlayer: CheckersPlayer;
+  startingPlayer: CheckersPlayer;
+  status: "waiting" | "in_progress" | "won" | "draw";
+  winner: CheckersPlayer | null;
+  activePiece: number | null;
+  orangeCaptures: number;
+  blueCaptures: number;
+  moveCount: number;
+  lastMove?: CheckersLastMove | null;
+  playerRoles: Record<string, CheckersPlayer>;
+  rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  turnExpiresAt?: number | null;
 }
 
 export interface ServerEnvelope<T = unknown> {

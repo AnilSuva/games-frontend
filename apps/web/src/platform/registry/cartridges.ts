@@ -19,4 +19,7 @@ export const CARTRIDGE_MAP: Record<
   "brick-blast": React.lazy(
     () => import("@/games/arcade/brick-blast/components/BrickBlastGame")
   ),
+  checkers: React.lazy(
+    () => import("@/games/board/checkers/components/CheckersGame")
+  ),
 };

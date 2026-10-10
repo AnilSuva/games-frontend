@@ -12,6 +12,7 @@ export interface SoundConfig {
   spinTick: number;
   victory: number;
   lose: number;
+  checkersSlide: number;
 }
 
 export const SOUND_CONFIG: SoundConfig = {
@@ -21,6 +22,7 @@ export const SOUND_CONFIG: SoundConfig = {
   spinTick: 60,
   victory: 70,
   lose: 65,
+  checkersSlide: 65,
 };
 
 export type SpinTickSoundName = `spinTick${1 | 2 | 3 | 4 | 5 | 6 | 7}`;
@@ -40,6 +42,7 @@ export const SOUND_FILES: Record<SoundEffectName, string> = {
   buttonClick: "/audio/general/button-click.mp3",
   dropBall: "/audio/connect-four/drop-ball.mp3",
   tileBreak: "/audio/brick-blast/tile-break.mp3",
+  checkersSlide: "/audio/chekers/chekers-slider.mp3",
   victory: "/audio/general/victory.mp3",
   lose: "/audio/general/lose.mp3",
   spinTick1: "/audio/spin-wheel/spin-1.mp3",

@@ -38,6 +38,7 @@ export function useMultiplayerRoom({
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const myPlayerIdRef = useRef<string | null>(null);
   const [room, setRoom] = useState<RoomDto | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOpponentConnected, setIsOpponentConnected] = useState<boolean>(true);
@@ -52,6 +53,10 @@ export function useMultiplayerRoom({
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onMessageRef = useRef(onMessage);
   const onRoomUpdatedRef = useRef(onRoomUpdated);
+
+  useEffect(() => {
+    myPlayerIdRef.current = myPlayerId;
+  }, [myPlayerId]);
 
   useEffect(() => {
     roomRef.current = room;
@@ -159,6 +164,7 @@ export function useMultiplayerRoom({
             playerId: string;
             sessionToken: string;
           };
+          myPlayerIdRef.current = payload.playerId;
           setMyPlayerId(payload.playerId);
           setStoredSessionToken(payload.sessionToken);
 
@@ -278,6 +284,7 @@ export function useMultiplayerRoom({
           setErrorMessage(friendlyMessage);
 
           if (
+            payload.code === "ROOM_NOT_FOUND" ||
             payload.code === "RECONNECT_EXPIRED" ||
             payload.code === "INVALID_SESSION"
           ) {
@@ -299,11 +306,20 @@ export function useMultiplayerRoom({
   );
 
   const connect = useCallback(() => {
-    // If active socket is already connecting or open, prevent duplicate creation
+    // If active socket is already open, execute any pending action and maintain connection
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      if (myPlayerIdRef.current && pendingActionRef.current) {
+        const action = pendingActionRef.current;
+        pendingActionRef.current = null;
+        action();
+      }
+      return;
+    }
+
+    // If active socket is already connecting, let handshake finish
     if (
       socketRef.current &&
-      (socketRef.current.readyState === WebSocket.OPEN ||
-        socketRef.current.readyState === WebSocket.CONNECTING)
+      socketRef.current.readyState === WebSocket.CONNECTING
     ) {
       return;
     }
@@ -482,6 +498,8 @@ export function useMultiplayerRoom({
     }
 
     setConnectionState("disconnected");
+    setMyPlayerId(null);
+    myPlayerIdRef.current = null;
     setRoom(null);
     setErrorMessage(null);
   }, [clearConnectionTimeout, clearRoomTimeout, room, stopPingTimer]);
@@ -493,13 +511,20 @@ export function useMultiplayerRoom({
       const doCreate = () => {
         setConnectionState("creating_room");
         startRoomTimeout("create");
-        sendMessage("room.create", {
+        const sentId = sendMessage("room.create", {
           gameId,
           maxPlayers: options?.maxPlayers ?? defaultMaxPlayers,
         });
+        if (!sentId) {
+          pendingActionRef.current = doCreate;
+          connect();
+        }
       };
 
-      if (connectionState === "connected") {
+      if (
+        connectionState === "connected" ||
+        (socketRef.current?.readyState === WebSocket.OPEN && myPlayerIdRef.current)
+      ) {
         doCreate();
       } else {
         setConnectionState("creating_room");
@@ -531,12 +556,19 @@ export function useMultiplayerRoom({
       const doJoin = () => {
         setConnectionState("joining_room");
         startRoomTimeout("join");
-        sendMessage("room.join", {
+        const sentId = sendMessage("room.join", {
           roomCode: cleanCode,
         });
+        if (!sentId) {
+          pendingActionRef.current = doJoin;
+          connect();
+        }
       };
 
-      if (connectionState === "connected") {
+      if (
+        connectionState === "connected" ||
+        (socketRef.current?.readyState === WebSocket.OPEN && myPlayerIdRef.current)
+      ) {
         doJoin();
       } else {
         setConnectionState("joining_room");

@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 
 test("Sound Config: includes required sound keys with valid percentage ranges (0 - 100)", () => {
-  const expectedKeys = ["buttonClick", "dropBall", "tileBreak"];
+  const expectedKeys = ["buttonClick", "dropBall", "tileBreak", "checkersSlide"];
   for (const key of expectedKeys) {
     assert.ok(key in SOUND_CONFIG, `Missing expected sound key: ${key}`);
     const val = SOUND_CONFIG[key];
@@ -27,6 +27,7 @@ test("Sound Config: volume conversion correctly scales percentages (0 - 100) to 
   assert.equal(getSoundVolume("buttonClick"), SOUND_CONFIG.buttonClick / 100);
   assert.equal(getSoundVolume("dropBall"), SOUND_CONFIG.dropBall / 100);
   assert.equal(getSoundVolume("tileBreak"), SOUND_CONFIG.tileBreak / 100);
+  assert.equal(getSoundVolume("checkersSlide"), SOUND_CONFIG.checkersSlide / 100);
 
   // Default values check
   assert.equal(SOUND_CONFIG.buttonClick, 60);
@@ -37,6 +38,9 @@ test("Sound Config: volume conversion correctly scales percentages (0 - 100) to 
 
   assert.equal(SOUND_CONFIG.tileBreak, 50);
   assert.equal(getSoundVolume("tileBreak"), 0.5);
+
+  assert.equal(SOUND_CONFIG.checkersSlide, 65);
+  assert.equal(getSoundVolume("checkersSlide"), 0.65);
 });
 
 test("Sound Files: maps every effect to an existing physical audio file in public/", () => {

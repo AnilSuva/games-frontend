@@ -21,11 +21,40 @@ export interface RemoteGameEventData {
   data?: unknown;
 }
 
+export interface BallSyncData {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius?: number;
+  power?: number;
+  speedMultiplier?: number;
+  active?: boolean;
+}
+
+export interface BallSyncPayload {
+  balls: BallSyncData[];
+}
+
+export interface BrickDestroyedPayload {
+  brickIndex?: number;
+  id?: string;
+  hp?: number;
+  destroyed: boolean;
+  score?: number;
+  specialPowerUp?: string | null;
+  x?: number;
+  y?: number;
+}
+
 export function useOnlineBrickBlast() {
   const [gameState, setGameState] = useState<OnlineBrickBlastState | null>(null);
 
   const onRemoteInputRef = useRef<((data: RemoteInputData) => void) | null>(null);
   const onRemoteEventRef = useRef<((data: RemoteGameEventData) => void) | null>(null);
+  const onBallSyncRef = useRef<((data: BallSyncPayload) => void) | null>(null);
+  const onBrickDestroyedRef = useRef<((data: BrickDestroyedPayload) => void) | null>(null);
   const myPlayerIdRef = useRef<string | null>(null);
   const myRoleRef = useRef<BrickBlastPlayer | null>(null);
 
@@ -52,6 +81,18 @@ export function useOnlineBrickBlast() {
         }
         onRemoteInputRef.current?.(payload as unknown as RemoteInputData);
       } else if (payload.type === "game_event" || payload.event) {
+        const eventName =
+          (payload.event as string) ||
+          ((payload.data as { event?: string })?.event as string) ||
+          "";
+        const eventData = payload.data;
+
+        if (eventName === "ball_sync") {
+          onBallSyncRef.current?.(eventData as BallSyncPayload);
+        } else if (eventName === "brick_destroyed") {
+          onBrickDestroyedRef.current?.(eventData as BrickDestroyedPayload);
+        }
+
         onRemoteEventRef.current?.(payload as unknown as RemoteGameEventData);
       }
     } else if (envelope.type === "room.left") {
@@ -176,6 +217,32 @@ export function useOnlineBrickBlast() {
     multiplayer.leaveRoom();
   }, [multiplayer]);
 
+  // Send ball physics sync packet (Host-authoritative)
+  const sendBallSync = useCallback(
+    (data: BallSyncPayload) => {
+      if (!multiplayer.room || isMatchPaused) return;
+      multiplayer.sendMessage("game.event", {
+        roomId: multiplayer.room.roomId,
+        event: "ball_sync",
+        data,
+      });
+    },
+    [multiplayer, isMatchPaused]
+  );
+
+  // Send brick destruction event (Host-authoritative)
+  const sendBrickDestroyed = useCallback(
+    (data: BrickDestroyedPayload) => {
+      if (!multiplayer.room || isMatchPaused) return;
+      multiplayer.sendMessage("game.event", {
+        roomId: multiplayer.room.roomId,
+        event: "brick_destroyed",
+        data,
+      });
+    },
+    [multiplayer, isMatchPaused]
+  );
+
   const disconnect = useCallback(() => {
     setGameState(null);
     multiplayer.disconnect();
@@ -186,9 +253,13 @@ export function useOnlineBrickBlast() {
     (handlers: {
       onRemoteInput?: (data: RemoteInputData) => void;
       onRemoteEvent?: (data: RemoteGameEventData) => void;
+      onBallSync?: (data: BallSyncPayload) => void;
+      onBrickDestroyed?: (data: BrickDestroyedPayload) => void;
     }) => {
       onRemoteInputRef.current = handlers.onRemoteInput ?? null;
       onRemoteEventRef.current = handlers.onRemoteEvent ?? null;
+      onBallSyncRef.current = handlers.onBallSync ?? null;
+      onBrickDestroyedRef.current = handlers.onBrickDestroyed ?? null;
     },
     []
   );
@@ -256,6 +327,7 @@ export function useOnlineBrickBlast() {
     isLoser,
     hasRequestedRematch,
     opponentRequestedRematch,
+    isHost: myRole === "orange",
     connect: multiplayer.connect,
     disconnect,
     exitMatch: disconnect,
@@ -263,6 +335,8 @@ export function useOnlineBrickBlast() {
     joinRoom: multiplayer.joinRoom,
     sendInput,
     sendGameEvent,
+    sendBallSync,
+    sendBrickDestroyed,
     requestRematch,
     leaveRoom,
     setRemoteHandlers,

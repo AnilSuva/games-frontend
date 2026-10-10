@@ -161,8 +161,11 @@ export default function BrickBlastGame({
       sceneRef.current?.restartMatch(nextStarter, "online", undefined, {
         sendInput: online.sendInput,
         sendGameEvent: online.sendGameEvent,
+        sendBallSync: online.sendBallSync,
+        sendBrickDestroyed: online.sendBrickDestroyed,
         myRole: online.myRole ?? "orange",
         myPlayerId: online.myPlayerId ?? undefined,
+        isHost: online.myRole === "orange",
       });
       onLifecycleChange?.("playing");
       onScoreUpdate?.(0);
@@ -173,6 +176,8 @@ export default function BrickBlastGame({
     online.gameState?.startingPlayer,
     online.sendInput,
     online.sendGameEvent,
+    online.sendBallSync,
+    online.sendBrickDestroyed,
     online.myRole,
     online.myPlayerId,
     onLifecycleChange,
@@ -317,11 +322,16 @@ export default function BrickBlastGame({
       gameInstance.events.once("ready", () => {
         if (!isMounted || !gameInstance) return;
 
+        const localPlayerRole: PlatformPlayer = onlineRef.current.myRole ?? "orange";
+        const isHost: boolean = onlineRef.current.myRole === "orange";
+
         const scene = gameInstance.scene.add("BrickBlastScene", BrickBlastScene, true, {
           startingPlayer,
           mode: selectedMode,
           difficulty: botDifficulty,
           botPaddle,
+          localPlayerRole,
+          isHost,
           online:
             selectedMode === "online"
               ? {
@@ -329,8 +339,13 @@ export default function BrickBlastGame({
                     onlineRef.current.sendInput(input, data as Parameters<typeof onlineRef.current.sendInput>[1]),
                   sendGameEvent: (event: string, data?: unknown) =>
                     onlineRef.current.sendGameEvent(event, data as Parameters<typeof onlineRef.current.sendGameEvent>[1]),
+                  sendBallSync: (data: Parameters<typeof onlineRef.current.sendBallSync>[0]) =>
+                    onlineRef.current.sendBallSync(data),
+                  sendBrickDestroyed: (data: Parameters<typeof onlineRef.current.sendBrickDestroyed>[0]) =>
+                    onlineRef.current.sendBrickDestroyed(data),
                   myRole: onlineRef.current.myRole ?? "orange",
                   myPlayerId: onlineRef.current.myPlayerId ?? undefined,
+                  isHost,
                 }
               : undefined,
           callbacks: {
@@ -383,6 +398,8 @@ export default function BrickBlastGame({
           onlineRef.current.setRemoteHandlers({
             onRemoteInput: (data) => scene.handleRemoteInput(data),
             onRemoteEvent: (data) => scene.handleRemoteEvent(data),
+            onBallSync: (data) => scene.handleBallSync(data),
+            onBrickDestroyed: (data) => scene.handleBrickDestroyed(data),
           });
         }
 

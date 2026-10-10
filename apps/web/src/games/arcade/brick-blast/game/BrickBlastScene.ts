@@ -32,12 +32,19 @@ import type { Ball, Brick, BrickBlastCallbacks, DroppedPowerUp, Paddle } from ".
 import type { PlatformPlayer } from "@/games/common/startingPlayer";
 import { soundManager } from "@/platform/audio";
 import { BrickBlastBotController } from "./botController";
+import type {
+  BallSyncPayload,
+  BrickDestroyedPayload,
+} from "@/platform/multiplayer/useOnlineBrickBlast";
 
 export interface OnlineNetworkingCallbacks {
   sendInput?: (input: string, data?: unknown) => void;
   sendGameEvent?: (event: string, data?: unknown) => void;
+  sendBallSync?: (data: BallSyncPayload) => void;
+  sendBrickDestroyed?: (data: BrickDestroyedPayload) => void;
   myRole?: PlatformPlayer;
   myPlayerId?: string;
+  isHost?: boolean;
 }
 
 export interface SceneInitData {
@@ -46,6 +53,8 @@ export interface SceneInitData {
   mode?: "1v1" | "vs-bot" | "online";
   difficulty?: "easy" | "medium" | "hard";
   botPaddle?: PlatformPlayer;
+  localPlayerRole?: PlatformPlayer;
+  isHost?: boolean;
   online?: OnlineNetworkingCallbacks;
 }
 
@@ -61,6 +70,14 @@ export class BrickBlastScene extends Phaser.Scene {
   private onlineConfig: OnlineNetworkingCallbacks | null = null;
   private myRole: PlatformPlayer = "orange";
   private myPlayerId: string | null = null;
+  private isHost = true;
+  private lastSyncTime = 0;
+  private lastBounceSyncTime = 0;
+  private pendingBounceSync = false;
+
+  public get isFlippedPerspective(): boolean {
+    return this.mode === "online" && this.myRole === "blue";
+  }
 
   public get controlledBotPaddle(): PlatformPlayer {
     return this.botPaddle;
@@ -153,8 +170,14 @@ export class BrickBlastScene extends Phaser.Scene {
     this.difficulty = data.difficulty || "medium";
     this.botPaddle = data.botPaddle || "blue";
     this.onlineConfig = data.online || null;
-    this.myRole = data.online?.myRole || "orange";
+    this.myRole = data.online?.myRole || data.localPlayerRole || "orange";
     this.myPlayerId = data.online?.myPlayerId || null;
+    this.isHost =
+      this.mode !== "online" ||
+      (data.isHost ?? data.online?.isHost ?? (this.myRole === "orange"));
+    this.lastSyncTime = 0;
+    this.lastBounceSyncTime = 0;
+    this.pendingBounceSync = false;
     this.opponentMoveIntent = 0;
     this.opponentTargetX = null;
     this.lastSentInput = null;
@@ -189,6 +212,13 @@ export class BrickBlastScene extends Phaser.Scene {
     bgGraphics.lineStyle(1, COLOR_WALL, 0.6);
     bgGraphics.lineBetween(0, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT / 2);
 
+    // Camera perspective rotation: Rotate 180 degrees if local player is Blue in online match
+    if (this.isFlippedPerspective) {
+      this.cameras.main.setRotation(Math.PI);
+    } else {
+      this.cameras.main.setRotation(0);
+    }
+
     // 2. Create Paddles
     this.bluePaddle = this.createPaddle("blue", TOP_PADDLE_Y, COLOR_BLUE);
     this.orangePaddle = this.createPaddle("orange", BOTTOM_PADDLE_Y, COLOR_ORANGE);
@@ -207,6 +237,12 @@ export class BrickBlastScene extends Phaser.Scene {
       .setAlpha(0)
       .setDepth(20);
 
+    if (this.isFlippedPerspective) {
+      this.statusText.setRotation(Math.PI);
+    } else {
+      this.statusText.setRotation(0);
+    }
+
     // 4. Setup Inputs (Desktop Keyboard)
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -219,9 +255,11 @@ export class BrickBlastScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
 
-    // 6. Build Level 1 Bricks & Serve initial Ball
+    // 6. Build Level 1 Bricks & Serve initial Ball (Authoritative on Host only)
     this.buildCurrentLevel();
-    this.serveBall(this.currentStarter);
+    if (this.isHost) {
+      this.serveBall(this.currentStarter);
+    }
 
     // 7. Instantiate preloaded audio
     this.tileBreakSound = soundManager.addPhaserSound(this, "tileBreak");
@@ -335,6 +373,29 @@ export class BrickBlastScene extends Phaser.Scene {
 
     this.renderBall(ball);
     this.balls.push(ball);
+
+    if (this.mode === "online" && this.isHost) {
+      this.lastSyncTime = performance.now();
+      this.sendBallSyncImmediate();
+    }
+  }
+
+  private sendBallSyncImmediate() {
+    if (this.mode !== "online" || !this.isHost || !this.onlineConfig?.sendBallSync) return;
+    const syncData: BallSyncPayload = {
+      balls: this.balls.map((b) => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        vx: b.vx,
+        vy: b.vy,
+        radius: b.radius,
+        power: b.power,
+        speedMultiplier: b.speedMultiplier,
+        active: b.active,
+      })),
+    };
+    this.onlineConfig.sendBallSync(syncData);
   }
 
   private renderBall(ball: Ball) {
@@ -426,8 +487,13 @@ export class BrickBlastScene extends Phaser.Scene {
     const scaleX = GAME_WIDTH / rect.width;
     const scaleY = GAME_HEIGHT / rect.height;
 
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    let x = (e.clientX - rect.left) * scaleX;
+    let y = (e.clientY - rect.top) * scaleY;
+
+    if (this.isFlippedPerspective) {
+      x = GAME_WIDTH - x;
+      y = GAME_HEIGHT - y;
+    }
 
     return { x, y };
   }
@@ -661,23 +727,44 @@ export class BrickBlastScene extends Phaser.Scene {
           this.onlineConfig?.sendInput?.("paddle.stop");
         }
       } else {
-        if (isMovingLeft) {
-          this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
-          blueMoved = true;
-          if (this.lastSentInput !== "paddle.left") {
-            this.lastSentInput = "paddle.left";
-            this.onlineConfig?.sendInput?.("paddle.left");
+        if (this.isFlippedPerspective) {
+          if (isMovingLeft) {
+            this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+            blueMoved = true;
+            if (this.lastSentInput !== "paddle.right") {
+              this.lastSentInput = "paddle.right";
+              this.onlineConfig?.sendInput?.("paddle.right");
+            }
+          } else if (isMovingRight) {
+            this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+            blueMoved = true;
+            if (this.lastSentInput !== "paddle.left") {
+              this.lastSentInput = "paddle.left";
+              this.onlineConfig?.sendInput?.("paddle.left");
+            }
+          } else if (this.lastSentInput && this.lastSentInput !== "paddle.stop") {
+            this.lastSentInput = "paddle.stop";
+            this.onlineConfig?.sendInput?.("paddle.stop");
           }
-        } else if (isMovingRight) {
-          this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
-          blueMoved = true;
-          if (this.lastSentInput !== "paddle.right") {
-            this.lastSentInput = "paddle.right";
-            this.onlineConfig?.sendInput?.("paddle.right");
+        } else {
+          if (isMovingLeft) {
+            this.bluePaddle.x -= PADDLE_KEYBOARD_SPEED * dt;
+            blueMoved = true;
+            if (this.lastSentInput !== "paddle.left") {
+              this.lastSentInput = "paddle.left";
+              this.onlineConfig?.sendInput?.("paddle.left");
+            }
+          } else if (isMovingRight) {
+            this.bluePaddle.x += PADDLE_KEYBOARD_SPEED * dt;
+            blueMoved = true;
+            if (this.lastSentInput !== "paddle.right") {
+              this.lastSentInput = "paddle.right";
+              this.onlineConfig?.sendInput?.("paddle.right");
+            }
+          } else if (this.lastSentInput && this.lastSentInput !== "paddle.stop") {
+            this.lastSentInput = "paddle.stop";
+            this.onlineConfig?.sendInput?.("paddle.stop");
           }
-        } else if (this.lastSentInput && this.lastSentInput !== "paddle.stop") {
-          this.lastSentInput = "paddle.stop";
-          this.onlineConfig?.sendInput?.("paddle.stop");
         }
       }
     } else if (this.mode === "vs-bot") {
@@ -728,6 +815,9 @@ export class BrickBlastScene extends Phaser.Scene {
         GAME_WIDTH - PADDLE_WIDTH / 2
       );
       this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
+      if (this.mode === "online" && this.myRole === "orange") {
+        this.sendOnlinePaddlePosition(this.orangePaddle.x);
+      }
     }
 
     if (blueMoved) {
@@ -737,32 +827,96 @@ export class BrickBlastScene extends Phaser.Scene {
         GAME_WIDTH - PADDLE_WIDTH / 2
       );
       this.renderPaddle(this.bluePaddle, COLOR_BLUE);
+      if (this.mode === "online" && this.myRole === "blue") {
+        this.sendOnlinePaddlePosition(this.bluePaddle.x);
+      }
     }
   }
 
   private updateBalls(dt: number) {
+    if (this.isHost) {
+      this.updateBallsHost(dt);
+    } else {
+      this.updateBallsGuest(dt);
+    }
+  }
+
+  private updateBallsGuest(dt: number) {
+    for (const ball of this.balls) {
+      if (!ball.active) continue;
+
+      // 1. Advance local ball position via Dead Reckoning
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      // 2. Extrapolate authoritative target position and smoothly blend error
+      if (ball.targetX !== undefined && ball.targetY !== undefined) {
+        const targetVx = ball.targetVx ?? ball.vx;
+        const targetVy = ball.targetVy ?? ball.vy;
+        ball.targetX += targetVx * dt;
+        ball.targetY += targetVy * dt;
+
+        const diffX = ball.targetX - ball.x;
+        const diffY = ball.targetY - ball.y;
+        const dist = Math.hypot(diffX, diffY);
+
+        if (dist > 80) {
+          // Snap if desync is large (e.g. after serve or significant network lag)
+          ball.x = ball.targetX;
+          ball.y = ball.targetY;
+          ball.vx = targetVx;
+          ball.vy = targetVy;
+        } else if (dist > 0.5) {
+          // Smooth blend toward authoritative projected target
+          const blend = Math.min(1, dt * 10);
+          ball.x += diffX * blend;
+          ball.y += diffY * blend;
+        }
+
+        if (ball.targetVx !== undefined && ball.targetVy !== undefined) {
+          const vBlend = Math.min(1, dt * 10);
+          ball.vx = Phaser.Math.Linear(ball.vx, ball.targetVx, vBlend);
+          ball.vy = Phaser.Math.Linear(ball.vy, ball.targetVy, vBlend);
+        }
+      }
+
+      this.renderBall(ball);
+    }
+  }
+
+  private updateBallsHost(dt: number) {
     let hadEscape = false;
+    let hadBounce = false;
+
     for (const ball of this.balls) {
       if (!ball.active) continue;
 
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
 
-      // Wall reflections (Left & Right)
-      if (ball.x - ball.radius <= 0) {
+      // Wall reflections (Left & Right) - only reflect if moving toward the boundary
+      if (ball.x - ball.radius <= 0 && ball.vx < 0) {
         ball.x = ball.radius;
         ball.vx = Math.abs(ball.vx);
-      } else if (ball.x + ball.radius >= GAME_WIDTH) {
+        hadBounce = true;
+      } else if (ball.x + ball.radius >= GAME_WIDTH && ball.vx > 0) {
         ball.x = GAME_WIDTH - ball.radius;
         ball.vx = -Math.abs(ball.vx);
+        hadBounce = true;
       }
 
       // Paddle deflection
-      this.checkPaddleDeflection(ball, this.orangePaddle, -1);
-      this.checkPaddleDeflection(ball, this.bluePaddle, 1);
+      if (this.checkPaddleDeflection(ball, this.orangePaddle, -1)) {
+        hadBounce = true;
+      }
+      if (this.checkPaddleDeflection(ball, this.bluePaddle, 1)) {
+        hadBounce = true;
+      }
 
       // Brick collisions
-      this.checkBrickCollisions(ball);
+      if (this.checkBrickCollisions(ball)) {
+        hadBounce = true;
+      }
 
       // Boundary escape / Loss condition
       if (ball.y - ball.radius > GAME_HEIGHT) {
@@ -782,12 +936,31 @@ export class BrickBlastScene extends Phaser.Scene {
     if (hadEscape) {
       this.balls = this.balls.filter((b) => b.active);
     }
+
+    if (this.mode === "online") {
+      const now = performance.now();
+      const isTickDue = now - this.lastSyncTime >= 100;
+      const canSendBounce = (hadBounce || this.pendingBounceSync) && (now - this.lastBounceSyncTime >= 50);
+
+      if (hadBounce && !canSendBounce) {
+        this.pendingBounceSync = true;
+      }
+
+      if (canSendBounce || isTickDue || hadEscape) {
+        this.lastSyncTime = now;
+        if (canSendBounce || hadBounce || hadEscape) {
+          this.lastBounceSyncTime = now;
+          this.pendingBounceSync = false;
+        }
+        this.sendBallSyncImmediate();
+      }
+    }
   }
 
-  private checkPaddleDeflection(ball: Ball, paddle: Paddle, bounceDirY: number) {
+  private checkPaddleDeflection(ball: Ball, paddle: Paddle, bounceDirY: number): boolean {
     // bounceDirY = -1 (bouncing up from bottom paddle), +1 (bouncing down from top paddle)
     const isMovingTowardPaddle = bounceDirY === -1 ? ball.vy > 0 : ball.vy < 0;
-    if (!isMovingTowardPaddle) return;
+    if (!isMovingTowardPaddle) return false;
 
     const padHalfW = paddle.width / 2;
     const padHalfH = paddle.height / 2;
@@ -821,10 +994,12 @@ export class BrickBlastScene extends Phaser.Scene {
 
       // Reposition to paddle surface
       ball.y = bounceDirY === -1 ? paddle.y - padHalfH - ball.radius : paddle.y + padHalfH + ball.radius;
+      return true;
     }
+    return false;
   }
 
-  private checkBrickCollisions(ball: Ball) {
+  private checkBrickCollisions(ball: Ball): boolean {
     for (let i = this.bricks.length - 1; i >= 0; i--) {
       const brick = this.bricks[i];
       if (!brick || !brick.alive || brick.hp <= 0) continue;
@@ -878,24 +1053,52 @@ export class BrickBlastScene extends Phaser.Scene {
           this.score += pts;
           this.callbacks.onScoreUpdate?.(this.score);
 
+          let specialPowerUp: PowerUpType | null = null;
           // If special, spawn a collectible power-up
           if (brick.def.isSpecial) {
-            this.spawnPowerUp(brick.def.x, brick.def.y, ball.vy);
+            specialPowerUp =
+              ALL_POWER_UP_TYPES[Math.floor(Math.random() * ALL_POWER_UP_TYPES.length)];
+            this.spawnPowerUp(brick.def.x, brick.def.y, ball.vy, specialPowerUp);
+          }
+
+          if (this.mode === "online") {
+            this.onlineConfig?.sendBrickDestroyed?.({
+              brickIndex: i,
+              id: brick.def.id,
+              hp: 0,
+              destroyed: true,
+              score: this.score,
+              specialPowerUp,
+              x: brick.def.x,
+              y: brick.def.y,
+            });
           }
         } else {
           // Brick takes damage but survives (e.g. 2-hit brick with 1 HP remaining)
           this.renderBrick(brick);
+          this.playTileBreakSound();
+
+          if (this.mode === "online") {
+            this.onlineConfig?.sendBrickDestroyed?.({
+              brickIndex: i,
+              id: brick.def.id,
+              hp: brick.hp,
+              destroyed: false,
+              score: this.score,
+            });
+          }
         }
 
         // Handle one brick collision per step to prevent multi-hit tunneling
-        break;
+        return true;
       }
     }
+    return false;
   }
 
-  private spawnPowerUp(x: number, y: number, ballVy: number) {
-    const randomType =
-      ALL_POWER_UP_TYPES[Math.floor(Math.random() * ALL_POWER_UP_TYPES.length)];
+  private spawnPowerUp(x: number, y: number, ballVy: number, forcedType?: PowerUpType) {
+    const powerType =
+      forcedType || ALL_POWER_UP_TYPES[Math.floor(Math.random() * ALL_POWER_UP_TYPES.length)];
 
     // Capsule drifts in the direction the ball was traveling so both sides can play for it
     const vy = ballVy < 0 ? -POWERUP_FALL_SPEED : POWERUP_FALL_SPEED;
@@ -903,7 +1106,7 @@ export class BrickBlastScene extends Phaser.Scene {
     const graphics = this.add.graphics().setDepth(8);
     const powerUp: DroppedPowerUp = {
       id: ++this.powerUpIdCounter,
-      type: randomType,
+      type: powerType,
       x,
       y,
       vy,
@@ -933,6 +1136,29 @@ export class BrickBlastScene extends Phaser.Scene {
       if (!p.active) continue;
 
       p.y += p.vy * dt;
+
+      // In online mode, Guest only renders powerup movement; powerup pickup effects are handled authoritatively by Host
+      if (this.mode === "online" && !this.isHost) {
+        if (
+          (p.y + 7 >= this.orangePaddle.y - PADDLE_HEIGHT / 2 &&
+            p.y - 7 <= this.orangePaddle.y + PADDLE_HEIGHT / 2 &&
+            p.x >= this.orangePaddle.x - PADDLE_WIDTH / 2 &&
+            p.x <= this.orangePaddle.x + PADDLE_WIDTH / 2) ||
+          (p.y - 7 <= this.bluePaddle.y + PADDLE_HEIGHT / 2 &&
+            p.y + 7 >= this.bluePaddle.y - PADDLE_HEIGHT / 2 &&
+            p.x >= this.bluePaddle.x - PADDLE_WIDTH / 2 &&
+            p.x <= this.bluePaddle.x + PADDLE_WIDTH / 2) ||
+          p.y < 0 ||
+          p.y > GAME_HEIGHT
+        ) {
+          p.active = false;
+          p.graphics.destroy();
+          hadPickup = true;
+        } else {
+          this.renderPowerUp(p);
+        }
+        continue;
+      }
 
       // Check intercept with Orange (Bottom) Paddle
       if (
@@ -981,6 +1207,10 @@ export class BrickBlastScene extends Phaser.Scene {
   private applyPowerUp(type: PowerUpType, collectingPlayer: PlatformPlayer) {
     const def = POWER_UP_DEFINITIONS[type];
     this.showFloatingNotice(`${def.label}!`);
+
+    if (this.mode === "online" && this.isHost) {
+      this.onlineConfig?.sendGameEvent?.("powerup_collected", { type });
+    }
 
     switch (type) {
       case "extra_ball": {
@@ -1069,6 +1299,7 @@ export class BrickBlastScene extends Phaser.Scene {
   }
 
   private checkLevelCompletion() {
+    if (!this.isHost) return;
     if (!this.hasLevelStarted || this.isTransitioningLevel) return;
     if (this.bricks.length > 0) return;
 
@@ -1146,8 +1377,17 @@ export class BrickBlastScene extends Phaser.Scene {
       difficulty: difficulty || this.difficulty,
       botPaddle: botPaddle || this.botPaddle,
       online: online || (this.onlineConfig ?? undefined),
+      isHost: online?.isHost ?? (online?.myRole ? online.myRole === "orange" : this.isHost),
+      localPlayerRole: online?.myRole ?? this.myRole,
     });
     this.statusText?.setAlpha(0);
+    if (this.isFlippedPerspective) {
+      this.cameras.main.setRotation(Math.PI);
+      this.statusText?.setRotation(Math.PI);
+    } else {
+      this.cameras.main.setRotation(0);
+      this.statusText?.setRotation(0);
+    }
     if (this.orangePaddle) {
       this.orangePaddle.x = GAME_WIDTH / 2;
       this.renderPaddle(this.orangePaddle, COLOR_ORANGE);
@@ -1157,7 +1397,9 @@ export class BrickBlastScene extends Phaser.Scene {
       this.renderPaddle(this.bluePaddle, COLOR_BLUE);
     }
     this.buildCurrentLevel();
-    this.serveBall(this.currentStarter);
+    if (this.isHost) {
+      this.serveBall(this.currentStarter);
+    }
     this.callbacks.onLifecycleChange?.("playing");
     this.callbacks.onScoreUpdate?.(0);
     this.callbacks.onLevelChange?.(1);
@@ -1240,6 +1482,7 @@ export class BrickBlastScene extends Phaser.Scene {
 
   public handleRemoteEvent(data: { event: string; data?: unknown }) {
     if (this.mode !== "online") return;
+
     if (data.event === "game_over" && !this.isGameOver) {
       this.isGameOver = true;
       const d = data.data as { winner?: PlatformPlayer; score?: number } | undefined;
@@ -1254,6 +1497,141 @@ export class BrickBlastScene extends Phaser.Scene {
         },
       });
       this.callbacks.onLifecycleChange?.("finished");
+      return;
+    }
+
+    if (data.event === "level_complete" && !this.isTransitioningLevel) {
+      const d = data.data as { level?: number; score?: number } | undefined;
+      const nextLevel = d?.level ?? this.currentLevel + 1;
+      if (typeof d?.score === "number") {
+        this.score = d.score;
+        this.callbacks.onScoreUpdate?.(this.score);
+      }
+      this.isTransitioningLevel = true;
+      this.showFloatingNotice(`Level ${this.currentLevel} Clear!`);
+
+      this.time.delayedCall(1200, () => {
+        this.currentLevel = nextLevel;
+        this.callbacks.onLevelChange?.(this.currentLevel);
+        this.clearAllGameObjects();
+        this.buildCurrentLevel();
+        this.isTransitioningLevel = false;
+        this.statusText.setAlpha(0);
+      });
+      return;
+    }
+
+    if (data.event === "powerup_collected") {
+      const d = data.data as { type?: PowerUpType } | undefined;
+      if (d?.type && POWER_UP_DEFINITIONS[d.type]) {
+        this.showFloatingNotice(`${POWER_UP_DEFINITIONS[d.type].label}!`);
+      }
+      return;
+    }
+  }
+
+  public handleBallSync(payload: BallSyncPayload) {
+    if (this.mode !== "online" || this.isHost) return;
+    if (!payload?.balls) return;
+
+    const syncedIds = new Set<number>();
+
+    for (const bData of payload.balls) {
+      syncedIds.add(bData.id);
+      let localBall = this.balls.find((b) => b.id === bData.id);
+
+      if (!localBall) {
+        const graphics = this.add.graphics().setDepth(10);
+        localBall = {
+          id: bData.id,
+          x: bData.x,
+          y: bData.y,
+          vx: bData.vx,
+          vy: bData.vy,
+          radius: bData.radius ?? DEFAULT_BALL_RADIUS,
+          power: bData.power ?? DEFAULT_BALL_POWER,
+          speedMultiplier: bData.speedMultiplier ?? 1.0,
+          active: bData.active ?? true,
+          graphics,
+        };
+        localBall.targetX = bData.x;
+        localBall.targetY = bData.y;
+        localBall.targetVx = bData.vx;
+        localBall.targetVy = bData.vy;
+        this.renderBall(localBall);
+        this.balls.push(localBall);
+      } else {
+        localBall.targetX = bData.x;
+        localBall.targetY = bData.y;
+        localBall.targetVx = bData.vx;
+        localBall.targetVy = bData.vy;
+
+        // Apply host velocities directly for Dead Reckoning.
+        // If there is a velocity change (e.g. bounce happened), immediately update local velocity.
+        const velDiffSq =
+          (localBall.vx - bData.vx) ** 2 + (localBall.vy - bData.vy) ** 2;
+        if (velDiffSq > 100) {
+          localBall.vx = bData.vx;
+          localBall.vy = bData.vy;
+        }
+
+        // If distance error is large, snap position
+        const distSq = (localBall.x - bData.x) ** 2 + (localBall.y - bData.y) ** 2;
+        if (distSq > 6400) {
+          localBall.x = bData.x;
+          localBall.y = bData.y;
+        }
+
+        if (bData.radius !== undefined) localBall.radius = bData.radius;
+        if (bData.power !== undefined) localBall.power = bData.power;
+        if (bData.speedMultiplier !== undefined) localBall.speedMultiplier = bData.speedMultiplier;
+        if (bData.active !== undefined) localBall.active = bData.active;
+      }
+    }
+
+    // Clean up local balls that are no longer part of Host authoritative ball list
+    for (let i = this.balls.length - 1; i >= 0; i--) {
+      const b = this.balls[i];
+      if (!syncedIds.has(b.id) || !b.active) {
+        b.active = false;
+        b.graphics?.destroy();
+        this.balls.splice(i, 1);
+      }
+    }
+  }
+
+  public handleBrickDestroyed(data: BrickDestroyedPayload) {
+    if (this.mode !== "online" || this.isHost) return;
+
+    let brick = data.id ? this.bricks.find((b) => b.def.id === data.id) : null;
+    if (!brick && typeof data.brickIndex === "number" && data.brickIndex >= 0 && data.brickIndex < this.bricks.length) {
+      brick = this.bricks[data.brickIndex];
+    }
+
+    if (data.destroyed) {
+      if (brick) {
+        brick.alive = false;
+        brick.graphics?.clear();
+        brick.graphics?.destroy();
+        const idx = this.bricks.indexOf(brick);
+        if (idx !== -1) {
+          this.bricks.splice(idx, 1);
+        }
+      }
+      this.playTileBreakSound();
+      if (typeof data.score === "number") {
+        this.score = data.score;
+        this.callbacks.onScoreUpdate?.(this.score);
+      }
+      if (data.specialPowerUp && typeof data.x === "number" && typeof data.y === "number") {
+        this.spawnPowerUp(data.x, data.y, 1, data.specialPowerUp as PowerUpType);
+      }
+    } else {
+      if (brick && typeof data.hp === "number") {
+        brick.hp = data.hp;
+        this.renderBrick(brick);
+      }
+      this.playTileBreakSound();
     }
   }
 
