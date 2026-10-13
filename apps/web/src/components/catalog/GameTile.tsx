@@ -123,6 +123,17 @@ function GameTileIllustration({ id }: { id: string }) {
           <div className="w-10 h-10 rounded-full border-2 border-[#2563eb] bg-[#eff6ff] flex items-center justify-center text-lg font-bold text-[#2563eb] shrink-0">●</div>
         </div>
       );
+    case "ping-pong":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
+          <div className="relative w-16 h-20 rounded-md bg-[#1e5631] border border-white flex flex-col items-center justify-between p-1.5 shadow-sm">
+            <div className="w-7 h-1.5 rounded-full bg-[#2563eb]" />
+            <div className="w-full h-0.5 bg-white/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-white shadow" />
+            <div className="w-7 h-1.5 rounded-full bg-[#e0530a]" />
+          </div>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-full max-w-[80px] max-h-[80px] flex items-center justify-center text-[#9c978e]">

@@ -337,7 +337,9 @@ export async function handleClientMessage(
       }
 
       const moveAction =
-        message.payload.column !== undefined
+        message.payload.from !== undefined && message.payload.to !== undefined
+          ? { type: "MOVE", from: message.payload.from, to: message.payload.to }
+          : message.payload.column !== undefined
           ? { type: "MOVE", column: message.payload.column }
           : { type: "MOVE", position: message.payload.position };
 

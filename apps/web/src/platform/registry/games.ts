@@ -109,6 +109,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/arcade/brick-blast/components/BrickBlastGame"),
   },
   {
+    id: "ping-pong",
+    title: "Ping Pong",
+    shortDescription: "Fast-paced top-down table tennis duel.",
+    description:
+      "Swipe to slice, apply Magnus spin curves, and outplay your opponent in tactical top-down arcade table tennis.",
+    category: "arcade",
+    engine: "phaser",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot", "online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "4/3",
+    iconName: "activity",
+    badgeText: "New",
+    tags: ["Arcade", "Table Tennis", "Physics", "2-Player"],
+    loader: () =>
+      import("@/games/arcade/ping-pong/components/PingPongGame"),
+  },
+  {
     id: "archery",
     title: "Archery",
     shortDescription: "Precision target shooting with dynamic wind.",

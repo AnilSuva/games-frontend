@@ -145,6 +145,26 @@ export interface OnlineCheckersState {
   turnExpiresAt?: number | null;
 }
 
+export type PingPongPlayer = "orange" | "blue";
+
+export interface PingPongScore {
+  orange: number;
+  blue: number;
+}
+
+export interface OnlinePingPongState {
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  startingPlayer: PingPongPlayer;
+  scores: PingPongScore;
+  winner: PingPongPlayer | null;
+  playerRoles: Record<string, PingPongPlayer>;
+  rematchRequests: string[];
+  resultReason?: "win" | "disconnect_forfeit";
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  matchStartTime?: number;
+}
+
 export interface ServerEnvelope<T = unknown> {
   version: 1;
   type: string;

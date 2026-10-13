@@ -51,11 +51,16 @@ export const gameMoveSchema = z
     roomId: z.string().min(1).max(64),
     position: z.number().int().min(0).max(8).optional(),
     column: z.number().int().min(0).max(6).optional(),
+    from: z.number().int().min(0).max(63).optional(),
+    to: z.number().int().min(0).max(63).optional(),
   })
   .refine(
-    (data) => data.position !== undefined || data.column !== undefined,
+    (data) =>
+      data.position !== undefined ||
+      data.column !== undefined ||
+      (data.from !== undefined && data.to !== undefined),
     {
-      message: "Either position or column must be provided",
+      message: "Either position, column, or (from and to) must be provided",
     }
   );
 

@@ -85,6 +85,17 @@ function GameIllustration({ id }: { id: string }) {
           <div className="w-6 h-6 rounded-full border-2 border-[#2563eb] bg-[#eff6ff] flex items-center justify-center text-[10px] font-bold text-[#2563eb]">●</div>
         </div>
       );
+    case "ping-pong":
+      return (
+        <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-3">
+          <div className="relative w-16 h-20 rounded-md bg-[#1e5631] border border-white flex flex-col items-center justify-between p-1.5 shadow-sm">
+            <div className="w-6 h-1 rounded-full bg-[#2563eb]" />
+            <div className="w-full h-0.5 bg-white/80" />
+            <div className="w-2 h-2 rounded-full bg-white shadow" />
+            <div className="w-6 h-1 rounded-full bg-[#e0530a]" />
+          </div>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center text-[#9c978e]">

@@ -112,6 +112,8 @@ export interface GameMovePayload {
   roomId: string;
   position?: number;
   column?: number;
+  from?: number;
+  to?: number;
 }
 
 export interface GameRematchPayload {
