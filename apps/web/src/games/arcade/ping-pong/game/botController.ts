@@ -5,6 +5,12 @@ export interface BotControllerOptions {
   difficulty?: "easy" | "medium" | "hard";
 }
 
+/**
+ * AI Bot Controller for Blue Paddle (Top).
+ * Reproduces the observed behavior from Racchetta.CPUCaso in Two Player Games Challenge (base.apk):
+ * tracks the ball's incoming trajectory, calculates arrival intercept,
+ * and scales movement speed and targeting error based on difficulty.
+ */
 export class PingPongBotController {
   private difficulty: "easy" | "medium" | "hard";
   private currentX: number = GAME_WIDTH / 2;
@@ -27,29 +33,26 @@ export class PingPongBotController {
     const maxX = TABLE_MARGIN_X + TABLE_WIDTH - paddleWidth / 2;
 
     if (!ball || !ball.active) {
-      // Idle return to center
+      // Idle drift back toward table center
       const centerDist = GAME_WIDTH / 2 - this.currentX;
-      this.currentX += Math.sign(centerDist) * Math.min(Math.abs(centerDist), 160 * dt);
+      this.currentX += Math.sign(centerDist) * Math.min(Math.abs(centerDist), 180 * dt);
       return Math.max(minX, Math.min(maxX, this.currentX));
     }
 
-    // Reaction parameters based on difficulty
-    let maxSpeed = 420;
-    let errorRange = 14;
-    let predictCurve = false;
+    // Reaction parameters based on difficulty matching reference intervalloVelocitaCPU
+    let maxSpeed = 480;
+    let errorRange = 12;
 
     if (this.difficulty === "easy") {
-      maxSpeed = 280;
-      errorRange = 36;
-      predictCurve = false;
+      maxSpeed = 300;
+      errorRange = 32;
     } else if (this.difficulty === "hard") {
-      maxSpeed = 580;
+      maxSpeed = 640;
       errorRange = 4;
-      predictCurve = true;
     }
 
     const now = performance.now();
-    if (now - this.lastDecisionTime > 350) {
+    if (now - this.lastDecisionTime > 300) {
       this.lastDecisionTime = now;
       this.targetOffset = (Math.random() - 0.5) * 2 * errorRange;
     }
@@ -63,29 +66,24 @@ export class PingPongBotController {
 
       let predictedX = ball.x + ball.vx * timeToArrive;
 
-      // In hard mode, factor in Magnus spin curve
-      if (predictCurve && Math.abs(ball.spin) > 0.5) {
-        predictedX += Math.sign(ball.spin) * 28;
-      }
-
-      // Clamp target within paddle reachable court bounds (no wall rebounds)
+      // Clamp target within paddle reachable court bounds
       predictedX = Math.max(minX, Math.min(maxX, predictedX));
 
       targetX = predictedX + this.targetOffset;
 
-      // In hard mode, strategically aim toward corners
+      // In hard mode, strategically aim toward corners by offsetting racket impact point
       if (this.difficulty === "hard") {
-        const cornerAimOffset = ball.x > GAME_WIDTH / 2 ? -18 : 18;
+        const cornerAimOffset = ball.x > GAME_WIDTH / 2 ? -16 : 16;
         targetX += cornerAimOffset;
       }
     } else {
       // Ball is moving away towards Orange: drift toward center-table
-      targetX = GAME_WIDTH / 2 + this.targetOffset * 0.5;
+      targetX = GAME_WIDTH / 2 + this.targetOffset * 0.4;
     }
 
     targetX = Math.max(minX, Math.min(maxX, targetX));
 
-    // Smooth movement toward targetX
+    // Smooth movement toward targetX (lerpVelocitaRacchetta)
     const deltaX = targetX - this.currentX;
     const step = Math.sign(deltaX) * Math.min(Math.abs(deltaX), maxSpeed * dt);
     this.currentX += step;

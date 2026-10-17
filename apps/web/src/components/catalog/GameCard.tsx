@@ -87,33 +87,81 @@ function GameIllustration({ id }: { id: string }) {
       );
     case "ping-pong":
       return (
-        <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-3">
-          <div className="relative w-16 h-20 rounded-md bg-[#1e5631] border border-white flex flex-col items-center justify-between p-1.5 shadow-sm">
-            <div className="w-6 h-1 rounded-full bg-[#2563eb]" />
-            <div className="w-full h-0.5 bg-white/80" />
-            <div className="w-2 h-2 rounded-full bg-white shadow" />
-            <div className="w-6 h-1 rounded-full bg-[#e0530a]" />
-          </div>
+        <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-2">
+          <svg className="w-auto h-20 max-w-full" viewBox="0 0 96 72" fill="none">
+            {/* Table Surface Base */}
+            <rect x="14" y="58" width="68" height="6" rx="3" fill="#7ac84c" stroke="#1c1917" strokeWidth="2.2" />
+            <line x1="48" y1="58" x2="48" y2="64" stroke="#ffffff" strokeWidth="1.75" />
+
+            {/* Net */}
+            <rect x="44" y="47" width="8" height="12" rx="1.5" fill="#ffffff" stroke="#1c1917" strokeWidth="2" />
+            <line x1="48" y1="47" x2="48" y2="59" stroke="#1c1917" strokeWidth="1" strokeOpacity="0.35" />
+            <line x1="44" y1="53" x2="52" y2="53" stroke="#1c1917" strokeWidth="1" strokeOpacity="0.35" />
+
+            {/* Blue Paddle (Left) */}
+            <g transform="translate(29, 34) rotate(-18)">
+              <rect x="-3" y="10" width="6" height="15" rx="2" fill="#1f2937" stroke="#1c1917" strokeWidth="2.2" />
+              <circle cx="0" cy="0" r="14" fill="#2563eb" stroke="#1c1917" strokeWidth="2.5" />
+              <circle cx="-4" cy="-4" r="5" fill="#ffffff" fillOpacity="0.28" />
+            </g>
+
+            {/* Orange Paddle (Right) */}
+            <g transform="translate(67, 34) rotate(18)">
+              <rect x="-3" y="10" width="6" height="15" rx="2" fill="#1f2937" stroke="#1c1917" strokeWidth="2.2" />
+              <circle cx="0" cy="0" r="14" fill="#e0530a" stroke="#1c1917" strokeWidth="2.5" />
+              <circle cx="-4" cy="-4" r="5" fill="#ffffff" fillOpacity="0.28" />
+            </g>
+
+            {/* Ball & Rally Arc */}
+            <path d="M 29 22 Q 48 4 67 22" fill="none" stroke="#1c1917" strokeWidth="1.75" strokeDasharray="3 2.5" strokeOpacity="0.35" />
+            <line x1="41" y1="8" x2="38" y2="6" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.35" />
+            <line x1="55" y1="8" x2="58" y2="6" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.35" />
+            <circle cx="48" cy="16" r="5.5" fill="#ffffff" stroke="#1c1917" strokeWidth="2.2" />
+            <circle cx="46.5" cy="14.5" r="1.5" fill="#ffffff" />
+          </svg>
         </div>
       );
     case "knife-thrower":
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-2">
-          <div className="relative w-16 h-20 flex flex-col items-center justify-between">
-            <div className="w-2 h-4 rounded-xs bg-[#e2e8f0] border border-[#1c1917] flex flex-col items-center">
-              <div className="w-1.5 h-1.5 bg-[#334155] rounded-xs" />
-              <div className="w-3.5 h-0.5 bg-[#2563eb]" />
-            </div>
-            <div className="relative w-11 h-11 rounded-full bg-[#dca56d] border-[3px] border-[#8c5627] flex items-center justify-center shadow-xs">
-              <div className="w-6 h-6 rounded-full border border-[#bf854e]" />
-              <div className="w-2 h-2 rounded-full bg-[#9c612f]" />
-              <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-1.5 bg-[#e0530a] rounded-xs border border-[#1c1917]" />
-            </div>
-            <div className="w-2 h-4 rounded-xs bg-[#e2e8f0] border border-[#1c1917] flex flex-col items-center">
-              <div className="w-3.5 h-0.5 bg-[#e0530a]" />
-              <div className="w-1.5 h-1.5 bg-[#334155] rounded-xs" />
-            </div>
-          </div>
+          <svg className="w-auto h-20 max-w-full" viewBox="0 0 96 72" fill="none">
+            {/* Embedded Knife Left (Orange) */}
+            <g transform="translate(35, 17) rotate(-45)">
+              <polygon points="-2.5,-3 2.5,-3 0,6" fill="#e2e8f0" stroke="#1c1917" strokeWidth="1.8" />
+              <rect x="-4.5" y="-5" width="9" height="2" rx="0.5" fill="#1c1917" />
+              <rect x="-2.2" y="-14" width="4.4" height="9" rx="1" fill="#e0530a" stroke="#1c1917" strokeWidth="1.8" />
+              <line x1="-2" y1="-10" x2="2" y2="-10" stroke="#1c1917" strokeWidth="1" />
+              <circle cx="0" cy="-15" r="1.6" fill="#94a3b8" stroke="#1c1917" strokeWidth="1.5" />
+            </g>
+
+            {/* Embedded Knife Right (Blue) */}
+            <g transform="translate(61, 17) rotate(45)">
+              <polygon points="-2.5,-3 2.5,-3 0,6" fill="#e2e8f0" stroke="#1c1917" strokeWidth="1.8" />
+              <rect x="-4.5" y="-5" width="9" height="2" rx="0.5" fill="#1c1917" />
+              <rect x="-2.2" y="-14" width="4.4" height="9" rx="1" fill="#2563eb" stroke="#1c1917" strokeWidth="1.8" />
+              <line x1="-2" y1="-10" x2="2" y2="-10" stroke="#1c1917" strokeWidth="1" />
+              <circle cx="0" cy="-15" r="1.6" fill="#94a3b8" stroke="#1c1917" strokeWidth="1.5" />
+            </g>
+
+            {/* Wood Target Disk */}
+            <circle cx="48" cy="29" r="18" fill="#78350f" stroke="#1c1917" strokeWidth="2.4" />
+            <circle cx="48" cy="29" r="15" fill="#fde68a" stroke="#b45309" strokeWidth="1.2" />
+            <circle cx="48" cy="29" r="11" fill="none" stroke="#d97706" strokeWidth="1.2" strokeDasharray="6 2 9 2" />
+            <circle cx="48" cy="29" r="6.5" fill="none" stroke="#b45309" strokeWidth="1.2" />
+            <circle cx="48" cy="29" r="3.2" fill="#ef4444" stroke="#1c1917" strokeWidth="1.5" />
+            <circle cx="47" cy="28" r="0.8" fill="#ffffff" />
+
+            {/* Flying Knife from Bottom */}
+            <line x1="42" y1="53" x2="42" y2="65" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.3" strokeDasharray="3 2" />
+            <line x1="54" y1="53" x2="54" y2="65" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.3" strokeDasharray="3 2" />
+            <polygon points="48,43 51,53 45,53" fill="#f8fafc" stroke="#1c1917" strokeWidth="2" strokeLinejoin="round" />
+            <line x1="48" y1="44" x2="48" y2="53" stroke="#cbd5e1" strokeWidth="1.2" />
+            <rect x="43.5" y="53" width="9" height="2" rx="0.5" fill="#1c1917" />
+            <rect x="45.8" y="55" width="4.4" height="10" rx="1" fill="#e0530a" stroke="#1c1917" strokeWidth="2" />
+            <line x1="46" y1="59" x2="50" y2="59" stroke="#1c1917" strokeWidth="1" />
+            <line x1="46" y1="62" x2="50" y2="62" stroke="#1c1917" strokeWidth="1" />
+            <circle cx="48" cy="66.5" r="1.8" fill="#94a3b8" stroke="#1c1917" strokeWidth="1.6" />
+          </svg>
         </div>
       );
     default:

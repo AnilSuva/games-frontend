@@ -15,15 +15,13 @@ import {
   INITIAL_BALL_SPEED,
   MIN_BALL_SPEED,
   MAX_BALL_SPEED,
-  PADDLE_VELOCITY_INFLUENCE,
+  SPEED_INCREMENT,
+  SWIPE_SAMPLING_TIME,
+  MAX_DEFLECTION_ANGLE,
+  SWIPE_VELOCITY_INFLUENCE,
   SMASH_FORWARD_THRESHOLD,
-  HARD_SMASH_FORWARD_THRESHOLD,
-  HARD_HIT_SPEED_THRESHOLD,
-  BALL_DRAG_DECAY,
-  MAGNUS_FORCE,
-  SPIN_DECAY,
-  MAX_SPIN,
-  AIRTIME_EXPONENT,
+  SMASH_BOOST,
+  Z_ARC_HEIGHT,
   PADDLE_FACE_RADIUS,
   PADDLE_WIDTH,
   PADDLE_STROKE_WIDTH,
@@ -35,7 +33,7 @@ import {
 } from "../src/games/arcade/ping-pong/config/constants.ts";
 import { PingPongBotController } from "../src/games/arcade/ping-pong/game/botController.ts";
 
-test("Ping Pong Config & Dimensions: verifies 360x580 scale overhaul, large geometries, and bold strokes", () => {
+test("Ping Pong Config & Dimensions: verifies authentic 360x580 court, geometries, and reference constants from base.apk", () => {
   assert.equal(GAME_WIDTH, 360);
   assert.equal(GAME_HEIGHT, 580);
   assert.equal(NET_Y, 290);
@@ -49,36 +47,33 @@ test("Ping Pong Config & Dimensions: verifies 360x580 scale overhaul, large geom
   assert.equal(TABLE_WIDTH, 316);
   assert.equal(TABLE_HEIGHT, 528);
 
-  // Large Racket scale overhaul (radius >= 35px)
+  // Large Racket scale (radius >= 35px)
   assert.ok(PADDLE_FACE_RADIUS >= 35 && PADDLE_FACE_RADIUS <= 40);
   assert.equal(PADDLE_FACE_RADIUS, 36);
   assert.equal(PADDLE_WIDTH, 72);
   assert.equal(PADDLE_STROKE_WIDTH, 6);
 
-  // Large Ball scale overhaul (radius >= 12px)
+  // Large Ball scale (radius >= 12px)
   assert.ok(BALL_RADIUS >= 12 && BALL_RADIUS <= 15);
   assert.equal(BALL_RADIUS, 13);
   assert.equal(BALL_STROKE_WIDTH, 6);
 
-  // Aesthetic palette
+  // Minimalist palette
   assert.equal(COLOR_BG, 0xf4d07b);
   assert.equal(COLOR_TABLE, 0x7ac84c);
   assert.equal(COLOR_STROKE, 0x000000);
 
-  // Physics thresholds & extended airtime
-  assert.ok(MIN_BALL_SPEED < MAX_BALL_SPEED);
-  assert.equal(MIN_BALL_SPEED, 300);
-  assert.equal(INITIAL_BALL_SPEED, 380);
-  assert.equal(MAX_BALL_SPEED, 860);
-  assert.ok(PADDLE_VELOCITY_INFLUENCE > 0);
-  assert.ok(SMASH_FORWARD_THRESHOLD > 0);
-  assert.ok(HARD_SMASH_FORWARD_THRESHOLD > SMASH_FORWARD_THRESHOLD);
-  assert.ok(HARD_HIT_SPEED_THRESHOLD >= 500);
-  assert.ok(AIRTIME_EXPONENT > 0 && AIRTIME_EXPONENT < 1.0);
-  assert.ok(BALL_DRAG_DECAY < 1 && BALL_DRAG_DECAY > 0.99);
-  assert.ok(MAGNUS_FORCE > 0);
-  assert.ok(SPIN_DECAY < 1 && SPIN_DECAY > 0.9);
-  assert.ok(MAX_SPIN > 0);
+  // Authentic reference physics values from base.apk (JungleFrog.NPlayers.PingPong)
+  assert.equal(INITIAL_BALL_SPEED, 520);
+  assert.equal(MIN_BALL_SPEED, 460);
+  assert.equal(MAX_BALL_SPEED, 880);
+  assert.equal(SPEED_INCREMENT, 1.03);
+  assert.equal(SWIPE_SAMPLING_TIME, 0.20);
+  assert.equal(MAX_DEFLECTION_ANGLE, 0.75);
+  assert.equal(SWIPE_VELOCITY_INFLUENCE, 0.25);
+  assert.equal(SMASH_FORWARD_THRESHOLD, 90);
+  assert.equal(SMASH_BOOST, 160);
+  assert.equal(Z_ARC_HEIGHT, 0.45);
 });
 
 test("Ping Pong Bot AI: stays within table bounds across all difficulty tiers", () => {
@@ -88,20 +83,26 @@ test("Ping Pong Bot AI: stays within table bounds across all difficulty tiers", 
     const minX = TABLE_MARGIN_X + paddleWidth / 2;
     const maxX = TABLE_MARGIN_X + TABLE_WIDTH - paddleWidth / 2;
 
-    // Simulate idle ticks
+    // Simulate idle ticks: should drift towards center
     for (let i = 0; i < 10; i++) {
       const x = bot.update(0.016, null, paddleWidth);
       assert.ok(x >= minX && x <= maxX, `Bot X ${x} should be within [${minX}, ${maxX}]`);
     }
 
-    // Simulate ball coming toward bot
+    // Simulate incoming ball
     const mockBall = {
       x: 180,
-      y: 160,
-      vx: 30,
-      vy: -300,
-      spin: 3,
+      y: 200,
+      vx: 40,
+      vy: -480,
+      spin: 0,
       active: true,
+      zHeight: 0.3,
+      zPhase: "paddle_to_bounce",
+      startY: 505,
+      targetBounceY: 195,
+      targetPaddleY: 75,
+      trailLength: 0,
     };
 
     for (let i = 0; i < 20; i++) {
@@ -111,189 +112,121 @@ test("Ping Pong Bot AI: stays within table bounds across all difficulty tiers", 
   }
 });
 
-test("Ping Pong Center Aim Assist: 75% deadzone actively guides trajectory toward table center (180)", () => {
-  const exitSpeed = 380;
-  const tableCenterX = GAME_WIDTH / 2; // 180
-  const targetCenterY = 180;
-  const ballY = 505;
+test("Ping Pong Authentic Deflection Physics: natural angle from contact point without center aim deadzone", () => {
+  function calculateExitVelocity(relativeX, incomingSpeed, paddleVx = 0, newDirY = -1) {
+    const nextSpeed = Math.min(MAX_BALL_SPEED, Math.max(MIN_BALL_SPEED, incomingSpeed * SPEED_INCREMENT));
+    const baseAngle = relativeX * MAX_DEFLECTION_ANGLE;
+    const swipeAngleShift = Math.max(-0.3, Math.min(0.3, paddleVx / 1000)) * SWIPE_VELOCITY_INFLUENCE;
+    const finalAngle = Math.max(-0.82, Math.min(0.82, baseAngle + swipeAngleShift));
 
-  function calculateExitVx(relativeX, ballX = 180, paddleVx = 0) {
-    const absRelativeX = Math.abs(relativeX);
-    const hasHighLateralSwipe = Math.abs(paddleVx) > 200;
-    const isExtremeEdgeHit = absRelativeX >= 0.85;
-    const isMiddle75Percent = absRelativeX <= 0.75;
+    const vx = nextSpeed * Math.sin(finalAngle);
+    const vy = newDirY * nextSpeed * Math.cos(finalAngle);
+    return { vx, vy, speed: Math.hypot(vx, vy), angle: finalAngle };
+  }
 
-    let exitVx = 0;
-    if (isExtremeEdgeHit || hasHighLateralSwipe) {
-      const maxAngleRad = 0.88;
-      const angle = Math.sign(relativeX) * Math.pow(absRelativeX, 0.85) * maxAngleRad;
-      exitVx = exitSpeed * Math.sin(angle);
-      if (hasHighLateralSwipe) {
-        exitVx += paddleVx * PADDLE_VELOCITY_INFLUENCE * 0.5;
-      }
-    } else if (isMiddle75Percent) {
-      const dxToCenter = tableCenterX - ballX;
-      const dyToCenter = targetCenterY - ballY;
-      const centerAngle = Math.atan2(dxToCenter, Math.abs(dyToCenter));
+  // 1. Center contact (relativeX = 0): ball travels straight forward
+  const centerHit = calculateExitVelocity(0, 520, 0);
+  assert.equal(centerHit.vx, 0, "Center contact must yield zero horizontal deflection");
+  assert.ok(centerHit.vy < 0, "Ball must travel forward towards opponent");
+  assert.ok(Math.abs(centerHit.speed - 520 * SPEED_INCREMENT) < 0.01);
 
-      const aimFactor = Math.cos((absRelativeX / 0.75) * (Math.PI / 2));
-      const centerGuidedVx = exitSpeed * Math.sin(centerAngle) * 0.95;
-      const offsetVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.35) * 0.15;
-      exitVx = offsetVx + aimFactor * (centerGuidedVx - offsetVx);
-    } else {
-      const t = (absRelativeX - 0.75) / 0.10;
-      const offsetVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.35) * 0.15;
-      const edgeAngle = Math.sign(relativeX) * 0.45;
-      const edgeVx = exitSpeed * Math.sin(edgeAngle);
-      exitVx = offsetVx + t * (edgeVx - offsetVx);
+  // 2. Right side contact (relativeX = 0.5): ball deflects right (+X)
+  const rightHit = calculateExitVelocity(0.5, 520, 0);
+  assert.ok(rightHit.vx > 100, `Right contact must deflect right, got vx=${rightHit.vx}`);
+  assert.ok(rightHit.angle > 0.3, `Angle must be positive, got ${rightHit.angle}`);
+
+  // 3. Left side contact (relativeX = -0.5): ball deflects left (-X)
+  const leftHit = calculateExitVelocity(-0.5, 520, 0);
+  assert.ok(leftHit.vx < -100, `Left contact must deflect left, got vx=${leftHit.vx}`);
+  assert.ok(leftHit.angle < -0.3, `Angle must be negative, got ${leftHit.angle}`);
+
+  // 4. Extreme edge contact (relativeX = 1.0): produces maximum deflection angle (~43 degrees)
+  const edgeHit = calculateExitVelocity(1.0, 520, 0);
+  assert.ok(Math.abs(edgeHit.angle - MAX_DEFLECTION_ANGLE) < 0.01);
+
+  // 5. Lateral swipe shift: swiping right while hitting center shifts trajectory right
+  const swipedHit = calculateExitVelocity(0, 520, 300);
+  assert.ok(swipedHit.vx > 20, "Swiping right must shift exit trajectory to the right");
+
+  // 6. Velocity magnitude is strictly preserved
+  assert.ok(Math.abs(rightHit.speed - 520 * SPEED_INCREMENT) < 0.01);
+});
+
+test("Ping Pong Smash Boost: forward swipe transfers velocity with SMASH_BOOST", () => {
+  const incomingSpeed = 520;
+  const forwardSlow = 40; // gentle contact
+  const forwardSmash = 300; // fast forward swipe towards net
+
+  function calculateHitSpeed(forwardVel) {
+    let speed = Math.max(MIN_BALL_SPEED, incomingSpeed * SPEED_INCREMENT);
+    if (forwardVel > SMASH_FORWARD_THRESHOLD) {
+      const ratio = Math.min(1, Math.max(0, (forwardVel - SMASH_FORWARD_THRESHOLD) / 300));
+      speed += ratio * SMASH_BOOST;
     }
-    return Math.max(-exitSpeed * 0.80, Math.min(exitSpeed * 0.80, exitVx));
+    return Math.min(MAX_BALL_SPEED, speed);
   }
 
-  // 1. Exact Center Hit at table center (relativeX = 0, ballX = 180)
-  const vxCenter = calculateExitVx(0, 180);
-  assert.equal(vxCenter, 0, "Center hit at center of table must go straight forward (0 horizontal velocity)");
+  const slowSpeed = calculateHitSpeed(forwardSlow);
+  const smashSpeed = calculateHitSpeed(forwardSmash);
 
-  // 2. Active Center Aim Assist when hit near left sideline (ballX = 80)
-  const vxLeftHit = calculateExitVx(0, 80);
-  assert.ok(vxLeftHit > 50, "Hit on left side of table must be actively steered to the right (+Vx) toward center");
-
-  // 3. Active Center Aim Assist when hit near right sideline (ballX = 280)
-  const vxRightHit = calculateExitVx(0, 280);
-  assert.ok(vxRightHit < -50, "Hit on right side of table must be actively steered to the left (-Vx) toward center");
-
-  // 4. Moderate offset within 75% deadzone (relativeX = 0.45, ballX = 180)
-  const vxMiddle45 = calculateExitVx(0.45, 180);
-  assert.ok(Math.abs(vxMiddle45) < 15, "75% deadzone hits must remain closely centered (< 15 px/s)");
-
-  // 5. Extreme Outer 15% Edge Hit (relativeX = 0.92)
-  const vxEdge = calculateExitVx(0.92, 180);
-  assert.ok(vxEdge > 200, "Outer 15% edge hits must produce sharp intentional deflection (> 200 px/s)");
-
-  // 6. Hard Lateral Swipe Override (paddleVx = 300)
-  const vxSwiped = calculateExitVx(0.1, 180, 300);
-  assert.ok(vxSwiped > 80, "Hard lateral swipe must override aim assist and send ball sideways");
+  assert.equal(slowSpeed, 520 * SPEED_INCREMENT, "Slow hit should not trigger smash boost");
+  assert.ok(smashSpeed > slowSpeed + 80, `Smash hit must increase speed significantly (${smashSpeed} > ${slowSpeed})`);
+  assert.ok(smashSpeed <= MAX_BALL_SPEED, "Speed must never exceed MAX_BALL_SPEED");
 });
 
-test("Ping Pong Custom Physics: Velocity Transfer (Smash) boosts ball speed on forward swipe", () => {
-  const incomingSpeed = 300;
-  const forwardVelSlow = 60; // gentle contact
-  const forwardVelSmash = 350; // hard forward swipe toward net
-
-  // Smash calculation
-  const isSmashSlow = forwardVelSlow > SMASH_FORWARD_THRESHOLD;
-  const isSmashFast = forwardVelSmash > SMASH_FORWARD_THRESHOLD;
-
-  assert.equal(isSmashSlow, false, "Slow forward velocity should not trigger smash threshold");
-  assert.equal(isSmashFast, true, "Hard forward swipe must trigger smash threshold");
-
-  const smashBoostSlow = isSmashSlow ? Math.min(260, forwardVelSlow * 0.52) : 0;
-  const smashBoostFast = isSmashFast ? Math.min(260, forwardVelSmash * 0.52) : 0;
-
-  const exitSpeedSlow = Math.min(MAX_BALL_SPEED, incomingSpeed * 1.05 + smashBoostSlow);
-  const exitSpeedFast = Math.min(MAX_BALL_SPEED, incomingSpeed * 1.05 + smashBoostFast);
-
-  assert.ok(exitSpeedFast > exitSpeedSlow + 100, "Forward smash must add massive speed multiplier");
-  assert.ok(exitSpeedFast <= MAX_BALL_SPEED, "Speed must be capped at MAX_BALL_SPEED");
-});
-
-test("Ping Pong Custom Physics: Linear Drag gradually slows massive smashes", () => {
-  let speed = 750; // high-speed smash
-  const dt = 0.016;
-
-  // Simulate 30 frames (~0.5 seconds crossing table)
-  for (let frame = 0; frame < 30; frame++) {
-    const drag = Math.pow(BALL_DRAG_DECAY, dt * 60);
-    speed = Math.max(MIN_BALL_SPEED, speed * drag);
+test("Ping Pong Parabolic Z-Axis Arc: verifies clean physical projectile curve 4 * h_max * p * (1 - p)", () => {
+  function calculateZ(progress) {
+    return 4 * Z_ARC_HEIGHT * progress * (1 - progress);
   }
 
-  assert.ok(speed < 750, "Ball speed must decay over time due to linear damping");
-  assert.ok(speed >= MIN_BALL_SPEED, "Ball speed must never decay below MIN_BALL_SPEED");
+  // At launch (progress = 0)
+  assert.equal(calculateZ(0), 0, "Z height must be 0 at launch");
+
+  // At quarter flight (progress = 0.25)
+  const zQuarter = calculateZ(0.25);
+  assert.ok(Math.abs(zQuarter - 4 * 0.45 * 0.25 * 0.75) < 0.001);
+
+  // At apex (progress = 0.50)
+  const zApex = calculateZ(0.5);
+  assert.equal(zApex, Z_ARC_HEIGHT, "Z height must reach peak Z_ARC_HEIGHT at progress 0.5");
+
+  // At three-quarter flight (progress = 0.75)
+  const zThreeQuarter = calculateZ(0.75);
+  assert.equal(zThreeQuarter, zQuarter, "Parabolic arc must be symmetric around apex");
+
+  // At table contact (progress = 1.0)
+  assert.equal(calculateZ(1.0), 0, "Z height must return to 0 at table bounce contact");
 });
 
-test("Ping Pong Physics: Magnus Effect Curvature Direction", () => {
-  const speed = 400;
-  const vx = 0;
-  const vy = -400; // moving straight up
+test("Ping Pong Free Trajectory & Table Tennis Out-of-Bounds Rules", () => {
+  const tableMinX = TABLE_MARGIN_X;
+  const tableMaxX = TABLE_MARGIN_X + TABLE_WIDTH;
 
-  // Perpendicular unit vector to (0, -400) is (-(-400)/400, 0/400) = (1, 0)
-  const perpX = -vy / speed;
-  const perpY = vx / speed;
-
-  assert.equal(perpX, 1);
-  assert.equal(perpY, 0);
-
-  // Positive spin creates acceleration to the right (+X)
-  const positiveSpin = 10;
-  const accelX = perpX * positiveSpin * MAGNUS_FORCE * speed;
-  assert.ok(accelX > 0, "Positive spin must accelerate trajectory to the right");
-
-  // Negative spin creates acceleration to the left (-X)
-  const negativeSpin = -10;
-  const negAccelX = perpX * negativeSpin * MAGNUS_FORCE * speed;
-  assert.ok(negAccelX < 0, "Negative spin must accelerate trajectory to the left");
-});
-
-test("Ping Pong Simulated Z-Axis: Extended airtime hang-time with AIRTIME_EXPONENT", () => {
-  const startY = 505; // Orange paddle baseline
-  const targetBounceY = 180; // Deep bounce point on Blue's half (NET_Y - 110)
-
-  const totalDist = Math.abs(targetBounceY - startY);
-  assert.ok(totalDist > 0);
-
-  function calculateZHeight(progress) {
-    return Math.pow(Math.sin(Math.PI * progress), AIRTIME_EXPONENT);
-  }
-
-  // At start
-  assert.equal(calculateZHeight(0), 0);
-
-  // Early in flight (progress = 0.20)
-  // Standard sine gives ~0.587, but with AIRTIME_EXPONENT it hangs higher (~0.70)
-  const zEarly = calculateZHeight(0.20);
-  assert.ok(zEarly > 0.65, `Early flight zHeight (${zEarly}) should remain elevated (> 0.65) for floaty airtime`);
-
-  // At apex midpoint
-  assert.equal(calculateZHeight(0.50), 1.0);
-
-  // Late in flight before bounce (progress = 0.80)
-  const zLate = calculateZHeight(0.80);
-  assert.ok(zLate > 0.65, `Late flight zHeight (${zLate}) should remain elevated (> 0.65)`);
-
-  // At bounce contact
-  const zBounce = calculateZHeight(1.0);
-  assert.ok(Math.abs(zBounce) < 0.0001, "Z-height must drop to 0 at table bounce contact");
-});
-
-test("Ping Pong Free Trajectory: Ball moves freely without bouncing off borders, and goes out when leaving boundaries", () => {
-  const tableMinX = TABLE_MARGIN_X; // 22
-  const tableMaxX = TABLE_MARGIN_X + TABLE_WIDTH; // 338
-
-  function updateBallX(x, vx, dt = 0.016) {
+  function updateBallPosition(x, vx, dt = 0.016) {
     return x + vx * dt;
   }
 
-  // Ball moves freely according to velocity without bouncing off table borders
-  const ballHeadingLeft = updateBallX(25, -400);
+  // Ball moves freely according to velocity without bouncing off table side borders
+  const ballHeadingLeft = updateBallPosition(25, -450);
   assert.ok(
     ballHeadingLeft < tableMinX,
-    `Ball should travel freely past left table border (${ballHeadingLeft} < ${tableMinX}) without bouncing`
+    `Ball must travel freely past left table border (${ballHeadingLeft} < ${tableMinX})`
   );
 
-  const ballHeadingRight = updateBallX(335, 400);
+  const ballHeadingRight = updateBallPosition(335, 450);
   assert.ok(
     ballHeadingRight > tableMaxX,
-    `Ball should travel freely past right table border (${ballHeadingRight} > ${tableMaxX}) without bouncing`
+    `Ball must travel freely past right table border (${ballHeadingRight} > ${tableMaxX})`
   );
 
-  // Scoring Rule 1: Hitter hits ball out of bounds without landing on receiver's court -> receiver scores
+  // Scoring Rule 1: Hitter hits ball out of bounds without landing on receiver's court -> receiver scores (fault)
   const lastHitBy = "orange";
   let hasBouncedOnReceiverSide = false;
-  let pointWinner = hasBouncedOnReceiverSide ? lastHitBy : (lastHitBy === "orange" ? "blue" : "orange");
-  assert.equal(pointWinner, "blue", "If ball flies out without landing on receiver side, receiver scores");
+  let scorer = hasBouncedOnReceiverSide ? lastHitBy : (lastHitBy === "orange" ? "blue" : "orange");
+  assert.equal(scorer, "blue", "If ball flies out without landing on receiver court, receiver scores");
 
-  // Scoring Rule 2: Ball lands legally on receiver side, receiver misses and ball flies out -> hitter scores
+  // Scoring Rule 2: Ball lands legally on receiver side, receiver misses -> hitter scores
   hasBouncedOnReceiverSide = true;
-  pointWinner = hasBouncedOnReceiverSide ? lastHitBy : (lastHitBy === "orange" ? "blue" : "orange");
-  assert.equal(pointWinner, "orange", "If ball bounced on receiver side and receiver misses, hitter scores");
+  scorer = hasBouncedOnReceiverSide ? lastHitBy : (lastHitBy === "orange" ? "blue" : "orange");
+  assert.equal(scorer, "orange", "If ball bounced on receiver side and receiver misses, hitter scores");
 });

@@ -13,6 +13,7 @@ export interface Paddle {
   handleHeight: number;
   graphics: Phaser.GameObjects.Graphics;
   shadowGraphics: Phaser.GameObjects.Graphics;
+  history?: Array<{ x: number; y: number; time: number }>;
 }
 
 export interface Ball {

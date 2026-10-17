@@ -11,39 +11,36 @@ export const NET_HEIGHT = 8;
 export const NET_STROKE_WIDTH = 4;
 export const TABLE_STROKE_WIDTH = 7;
 
-export const TOP_PADDLE_Y = 75; // Blue (Guest) paddle baseline
+export const TOP_PADDLE_Y = 75; // Blue (Guest/Bot) paddle baseline
 export const BOTTOM_PADDLE_Y = 505; // Orange (Host) paddle baseline
 
-// Top-Down bold circular racket dimensions (Scale Overhaul: radius >= 35px)
+// Top-Down circular racket dimensions
 export const PADDLE_FACE_RADIUS = 36;
 export const PADDLE_WIDTH = PADDLE_FACE_RADIUS * 2; // 72
 export const HANDLE_WIDTH = 16;
 export const HANDLE_HEIGHT = 28;
 export const PADDLE_STROKE_WIDTH = 6;
-export const PADDLE_KEYBOARD_SPEED = 420;
+export const PADDLE_KEYBOARD_SPEED = 500;
 
-// Ball & physics constants (Scale Overhaul: radius >= 12px)
+// Authentic Table Tennis physics constants from base.apk
 export const BALL_RADIUS = 13;
 export const BALL_STROKE_WIDTH = 6;
-export const INITIAL_BALL_SPEED = 380;
-export const MIN_BALL_SPEED = 300;
-export const MAX_BALL_SPEED = 860;
+export const INITIAL_BALL_SPEED = 520; // px/sec - crisp, snappy pace
+export const MIN_BALL_SPEED = 460;
+export const MAX_BALL_SPEED = 880;
+export const SPEED_INCREMENT = 1.03; // +3% speed each rally hit
 export const WINNING_SCORE = 5;
 
-// Dynamic physics parameters & Feel
-export const PADDLE_VELOCITY_INFLUENCE = 0.35;
-export const SMASH_FORWARD_THRESHOLD = 140; // Forward swipe velocity threshold
-export const HARD_SMASH_FORWARD_THRESHOLD = 210; // Overpowered forward smash threshold that can fly out
-export const HARD_HIT_SPEED_THRESHOLD = 580; // Speed threshold where a direct smash can fly out of bounds
-export const BALL_DRAG_DECAY = 0.9975; // Linear damping/friction so massive smashes gradually slow down
-export const MAGNUS_FORCE = 0.00075;
-export const SPIN_DECAY = 0.985;
-export const MAX_SPIN = 30;
+// Swipe & contact dynamics
+export const SWIPE_SAMPLING_TIME = 0.20; // 200ms sampling window (secondiSuCuiFareIlSampling from base.apk)
+export const MAX_DEFLECTION_ANGLE = 0.75; // ~43 degrees max angle on edge hit
+export const SWIPE_VELOCITY_INFLUENCE = 0.25; // How much paddle swipe shifts ball exit angle
+export const SMASH_FORWARD_THRESHOLD = 90; // Forward swipe velocity threshold for power hit
+export const SMASH_BOOST = 160; // Max speed bonus on fast forward swipe
 
-// Visual & simulated Z-axis parameters
-export const TRAIL_MAX_LENGTH = 70;
-export const Z_PEAK_HEIGHT = 1.0;
-export const AIRTIME_EXPONENT = 0.65;
+// Parabolic Z-axis arc parameters
+export const Z_ARC_HEIGHT = 0.45; // Height factor for clean parabolic arc
+export const TRAIL_MAX_LENGTH = 50;
 
 // Bold minimalist palette matching reference styling
 export const COLOR_BG = 0xf4d07b; // Soft yellow/tan outer floor
