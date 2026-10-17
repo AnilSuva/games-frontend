@@ -45,20 +45,20 @@ test("Knife Thrower 2-Player Config & Layout: verifies 360x580 mobile viewport a
   // Central shared trunk at mid-screen (290)
   assert.equal(TRUNK_CENTER_X, 180);
   assert.equal(TRUNK_CENTER_Y, 290);
-  assert.equal(TRUNK_RADIUS, 60);
+  assert.equal(TRUNK_RADIUS, 76);
   assert.equal(TRUNK_STROKE_WIDTH, 5);
 
   // Player 1 (Orange / Bottom) throwing upward
   assert.equal(RED_KNIFE_SPAWN_X, 180);
   assert.equal(RED_KNIFE_SPAWN_Y, 515);
   assert.ok(RED_KNIFE_SPAWN_Y > TRUNK_CENTER_Y);
-  assert.equal(RED_KNIFE_DESTINY_Y, TRUNK_CENTER_Y + TRUNK_RADIUS - 6);
+  assert.equal(RED_KNIFE_DESTINY_Y, TRUNK_CENTER_Y + TRUNK_RADIUS - 8);
 
   // Player 2 (Blue / Top) throwing downward
   assert.equal(BLUE_KNIFE_SPAWN_X, 180);
   assert.equal(BLUE_KNIFE_SPAWN_Y, 65);
   assert.ok(BLUE_KNIFE_SPAWN_Y < TRUNK_CENTER_Y);
-  assert.equal(BLUE_KNIFE_DESTINY_Y, TRUNK_CENTER_Y - TRUNK_RADIUS + 6);
+  assert.equal(BLUE_KNIFE_DESTINY_Y, TRUNK_CENTER_Y - TRUNK_RADIUS + 8);
 
   // High-speed snappy flight
   assert.equal(KNIFE_SPEED, 1450);

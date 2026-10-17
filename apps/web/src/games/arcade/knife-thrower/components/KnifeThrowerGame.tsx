@@ -160,6 +160,9 @@ export default function KnifeThrowerGame({
         parent: containerRef.current,
         width: GAME_WIDTH,
         height: GAME_HEIGHT,
+        antialias: true,
+        antialiasGL: true,
+        roundPixels: false,
         backgroundColor: "#faf9f6",
         transparent: false,
         scale: {
@@ -306,32 +309,37 @@ export default function KnifeThrowerGame({
         >
           {/* Top Player HUD (Blue / Top) */}
           <div className="absolute top-2.5 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-            {/* Blue Inventory Mini-Blades */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
-              <span className="text-[10px] font-bold text-[#2563eb] uppercase tracking-wide">
+            {/* Blue Inventory & Player Pill */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#2563eb] uppercase tracking-wide">
+                <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
                 {selectedMode === "bot" ? "Bot" : "P2"}
               </span>
+              <div className="h-3 w-px bg-[#e6e3dc]" />
               <div className="flex items-center gap-1">
                 {Array.from({ length: maxKnives }).map((_, i) => (
                   <div
                     key={i}
-                    className={`w-1.5 h-3.5 rounded-[2px] border transition-all duration-150 ${
+                    className={`w-2 h-4 rounded-t-sm rounded-b-[1px] border transition-all duration-150 ${
                       i < inventories.blue
-                        ? "bg-[#2563eb] border-[#1d4ed8]"
-                        : "bg-[#f5f5f4] border-[#e7e5e4] opacity-35"
+                        ? "bg-[#2563eb] border-[#1d4ed8] shadow-2xs"
+                        : "bg-[#f5f5f4] border-[#e7e5e4] opacity-30"
                     }`}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Center: Intentionally empty to keep Blue ready knife completely unobstructed */}
-            <div className="flex-1" />
+            {/* Center: Set Progression Badge */}
+            <div className="px-2.5 py-1 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs text-[10px] font-semibold text-[#57534e] tracking-tight">
+              {selectedMode === "bot"
+                ? `Set ${currentSet + 1} • ${difficulty.toUpperCase()}`
+                : `Set ${currentSet + 1}`}
+            </div>
 
             {/* Blue Score Pill & Mode Button */}
             <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
-                <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
                 <span className="text-xs font-bold text-[#1c1917] font-mono leading-none">
                   {scores.blue}
                 </span>
@@ -340,7 +348,7 @@ export default function KnifeThrowerGame({
               <button
                 type="button"
                 onClick={handleBackToModeSelect}
-                className="pointer-events-auto px-2.5 py-1 rounded-full bg-white/95 hover:bg-white active:bg-[#f5f5f4] border border-[#e6e3dc] text-[11px] font-semibold text-[#57534e] hover:text-[#1c1917] shadow-xs transition active:scale-95 cursor-pointer"
+                className="pointer-events-auto px-2.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:bg-[#f5f5f4] border border-[#e6e3dc] text-[11px] font-semibold text-[#57534e] hover:text-[#1c1917] shadow-xs transition active:scale-95 cursor-pointer"
                 aria-label="Change Mode"
               >
                 Mode
@@ -348,50 +356,41 @@ export default function KnifeThrowerGame({
             </div>
           </div>
 
-          {/* Center Court Subtle Hints with Set Progression Indicator */}
-          <div className="absolute top-1/2 left-3 right-3 -translate-y-1/2 z-20 flex items-center justify-between pointer-events-none text-[9px] font-medium text-[#a8a29e]">
-            <span className="bg-white/85 px-2 py-0.5 rounded-full border border-[#e6e3dc]/80 shadow-2xs uppercase tracking-wider">
-              {selectedMode === "bot"
-                ? `Bot (${difficulty}) • Set ${currentSet + 1}`
-                : `1v1 Duel • Set ${currentSet + 1}`}
-            </span>
-            <span className="hidden sm:inline bg-white/85 px-2 py-0.5 rounded-full border border-[#e6e3dc]/80 shadow-2xs font-mono">
-              [Space] Throw
-            </span>
-          </div>
-
           {/* Bottom Player HUD (Orange / Bottom) */}
           <div className="absolute bottom-2.5 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-            {/* Orange Inventory Mini-Blades */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
-              <span className="text-[10px] font-bold text-[#e0530a] uppercase tracking-wide">
+            {/* Orange Inventory & Player Pill */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#e0530a] uppercase tracking-wide">
+                <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
                 {selectedMode === "bot" ? "You" : "P1"}
               </span>
+              <div className="h-3 w-px bg-[#e6e3dc]" />
               <div className="flex items-center gap-1">
                 {Array.from({ length: maxKnives }).map((_, i) => (
                   <div
                     key={i}
-                    className={`w-1.5 h-3.5 rounded-[2px] border transition-all duration-150 ${
+                    className={`w-2 h-4 rounded-b-sm rounded-t-[1px] border transition-all duration-150 ${
                       i < inventories.orange
-                        ? "bg-[#e0530a] border-[#c2410c]"
-                        : "bg-[#f5f5f4] border-[#e7e5e4] opacity-35"
+                        ? "bg-[#e0530a] border-[#c2410c] shadow-2xs"
+                        : "bg-[#f5f5f4] border-[#e7e5e4] opacity-30"
                     }`}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Center: Intentionally empty to keep Orange ready knife completely unobstructed */}
-            <div className="flex-1" />
+            {/* Desktop Throw Hint */}
+            <div className="hidden sm:inline px-2.5 py-1 rounded-full bg-white/90 border border-[#e6e3dc] shadow-xs backdrop-blur-xs text-[10px] font-medium text-[#78746d] font-mono">
+              [Space] Throw
+            </div>
 
             {/* Target Score Notice & Orange Score Pill */}
             <div className="flex items-center gap-1.5">
-              <div className="flex items-center px-2 py-0.5 rounded-full bg-white/80 border border-[#e6e3dc] text-[10px] font-semibold text-[#78746d]">
+              <div className="hidden xs:flex items-center px-2.5 py-1 rounded-full bg-white/85 border border-[#e6e3dc] text-[10px] font-semibold text-[#78746d]">
                 First to {WINNING_SCORE}
               </div>
 
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
-                <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-[#e6e3dc] shadow-xs backdrop-blur-xs">
                 <span className="text-xs font-bold text-[#1c1917] font-mono leading-none">
                   {scores.orange}
                 </span>

@@ -10,18 +10,18 @@ export const GAME_HEIGHT = 580;
 // Central Rotating Trunk geometry
 export const TRUNK_CENTER_X = 180;
 export const TRUNK_CENTER_Y = 290; // Mid-screen height
-export const TRUNK_RADIUS = 60;
+export const TRUNK_RADIUS = 76; // Prominent, bold log size for clear mobile visibility
 export const TRUNK_STROKE_WIDTH = 5;
 
 // Player 1 (Orange / Bottom) geometry
 export const RED_KNIFE_SPAWN_X = 180;
 export const RED_KNIFE_SPAWN_Y = 515;
-export const RED_KNIFE_DESTINY_Y = TRUNK_CENTER_Y + TRUNK_RADIUS - 6; // 344
+export const RED_KNIFE_DESTINY_Y = TRUNK_CENTER_Y + TRUNK_RADIUS - 8; // 358
 
 // Player 2 (Blue / Top) geometry
 export const BLUE_KNIFE_SPAWN_X = 180;
 export const BLUE_KNIFE_SPAWN_Y = 65;
-export const BLUE_KNIFE_DESTINY_Y = TRUNK_CENTER_Y - TRUNK_RADIUS + 6; // 236
+export const BLUE_KNIFE_DESTINY_Y = TRUNK_CENTER_Y - TRUNK_RADIUS + 8; // 222
 
 // Knife dimensions & physics
 export const KNIFE_WIDTH = 12;
@@ -32,8 +32,8 @@ export const KNIFE_GUARD_WIDTH = 18;
 export const KNIFE_SPEED = 1450; // px/sec
 
 // Collision threshold
-// For radius 60px and knife width 12px + clearance, ~0.26 radians (~14.9 deg)
-export const KNIFE_CLASH_ANGLE_THRESHOLD = 0.26; // radians
+// For radius 76px and knife width 12px + clearance, ~0.22 radians (~12.6 deg)
+export const KNIFE_CLASH_ANGLE_THRESHOLD = 0.22; // radians
 
 // 8 Default Obstacle Knives around the trunk (45° / PI/4 intervals)
 // Matching Unity Sword Default 1..8 in base.apk:

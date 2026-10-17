@@ -54,6 +54,10 @@ import {
 import { KnifeThrowerBot } from "./botController";
 import { soundManager } from "@/platform/audio";
 
+const TEX_SCALE = 4;
+const KNIFE_SCALE = 1 / TEX_SCALE;
+const TRUNK_SCALE = 1 / TEX_SCALE;
+
 export class KnifeThrowerScene extends Phaser.Scene {
   private callbacks!: KnifeThrowerCallbacks;
   private mode: "1v1" | "bot" = "1v1";
@@ -139,7 +143,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
     // 3. Central Rotating Trunk Container
     this.trunkContainer = this.add.container(TRUNK_CENTER_X, TRUNK_CENTER_Y);
     this.trunkContainer.setDepth(15);
-    this.trunkDisk = this.add.image(0, 0, "trunk_wood");
+    this.trunkDisk = this.add.image(0, 0, "trunk_wood").setScale(TRUNK_SCALE);
     this.trunkContainer.add(this.trunkDisk);
 
     // 4. Initialize Rotator & Bot
@@ -223,221 +227,265 @@ export class KnifeThrowerScene extends Phaser.Scene {
    * - "wood_chip": Brown splinter particle
    */
   private initProceduralTextures(): void {
-    // 1. Orange Knife (Facing UP: Blade on top, Handle on bottom)
+    // 1. Orange Knife (Facing UP: Blade on top, Handle on bottom - 4x high-res 48x200)
     if (!this.textures.exists("knife_orange")) {
       const g = this.make.graphics({ x: 0, y: 0 });
 
       // Steel blade
       g.fillStyle(COLOR_BLADE, 1);
       g.beginPath();
-      g.moveTo(6, 0); // Tip
-      g.lineTo(12, 12);
-      g.lineTo(12, 34);
-      g.lineTo(0, 34);
-      g.lineTo(0, 12);
+      g.moveTo(24, 0); // Tip
+      g.lineTo(48, 48);
+      g.lineTo(48, 136);
+      g.lineTo(0, 136);
+      g.lineTo(0, 48);
       g.closePath();
       g.fillPath();
 
-      // Blade bevel
+      // Blade bevel (shadowed right half)
       g.fillStyle(COLOR_BLADE_BEVEL, 0.7);
       g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(12, 12);
-      g.lineTo(12, 34);
-      g.lineTo(6, 34);
+      g.moveTo(24, 0);
+      g.lineTo(48, 48);
+      g.lineTo(48, 136);
+      g.lineTo(24, 136);
       g.closePath();
       g.fillPath();
 
       // Orange guard
       g.fillStyle(COLOR_ORANGE, 1);
-      g.fillRoundedRect(0, 32, 12, 5, 2);
+      g.fillRoundedRect(0, 128, 48, 20, 8);
 
       // Slate handle
       g.fillStyle(COLOR_HANDLE, 1);
-      g.fillRoundedRect(3, 37, 6, 13, 2);
+      g.fillRoundedRect(12, 148, 24, 52, 8);
 
-      // Black outline
-      g.lineStyle(1.5, COLOR_TRUNK_STROKE, 1);
+      // Pommel accent
+      g.fillStyle(COLOR_ORANGE, 1);
+      g.fillRoundedRect(10, 192, 28, 8, 4);
+
+      // Dark crisp outline
+      g.lineStyle(4, COLOR_TRUNK_STROKE, 1);
       g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(12, 12);
-      g.lineTo(12, 32);
-      g.lineTo(12, 37);
-      g.lineTo(9, 37);
-      g.lineTo(9, 50);
-      g.lineTo(3, 50);
-      g.lineTo(3, 37);
-      g.lineTo(0, 37);
-      g.lineTo(0, 32);
-      g.lineTo(0, 12);
+      g.moveTo(24, 0);
+      g.lineTo(48, 48);
+      g.lineTo(48, 128);
+      g.lineTo(48, 148);
+      g.lineTo(36, 148);
+      g.lineTo(36, 200);
+      g.lineTo(12, 200);
+      g.lineTo(12, 148);
+      g.lineTo(0, 148);
+      g.lineTo(0, 128);
+      g.lineTo(0, 48);
       g.closePath();
       g.strokePath();
 
-      g.generateTexture("knife_orange", 12, 50);
+      g.generateTexture("knife_orange", 48, 200);
       g.destroy();
     }
 
-    // 2. Blue Knife (Facing DOWN: Blade on bottom, Handle on top)
+    // 2. Blue Knife (Facing DOWN: Blade on bottom, Handle on top - 4x high-res 48x200)
     if (!this.textures.exists("knife_blue")) {
       const g = this.make.graphics({ x: 0, y: 0 });
 
       // Steel blade
       g.fillStyle(COLOR_BLADE, 1);
       g.beginPath();
-      g.moveTo(6, 50); // Tip pointing DOWN
-      g.lineTo(12, 38);
-      g.lineTo(12, 16);
-      g.lineTo(0, 16);
-      g.lineTo(0, 38);
+      g.moveTo(24, 200); // Tip pointing DOWN
+      g.lineTo(48, 152);
+      g.lineTo(48, 64);
+      g.lineTo(0, 64);
+      g.lineTo(0, 152);
       g.closePath();
       g.fillPath();
 
       // Blade bevel
       g.fillStyle(COLOR_BLADE_BEVEL, 0.7);
       g.beginPath();
-      g.moveTo(6, 50);
-      g.lineTo(12, 38);
-      g.lineTo(12, 16);
-      g.lineTo(6, 16);
+      g.moveTo(24, 200);
+      g.lineTo(48, 152);
+      g.lineTo(48, 64);
+      g.lineTo(24, 64);
       g.closePath();
       g.fillPath();
 
       // Blue guard
       g.fillStyle(COLOR_BLUE, 1);
-      g.fillRoundedRect(0, 13, 12, 5, 2);
+      g.fillRoundedRect(0, 52, 48, 20, 8);
 
       // Slate handle
       g.fillStyle(COLOR_HANDLE, 1);
-      g.fillRoundedRect(3, 0, 6, 13, 2);
+      g.fillRoundedRect(12, 0, 24, 52, 8);
 
-      // Black outline
-      g.lineStyle(1.5, COLOR_TRUNK_STROKE, 1);
+      // Pommel accent
+      g.fillStyle(COLOR_BLUE, 1);
+      g.fillRoundedRect(10, 0, 28, 8, 4);
+
+      // Dark crisp outline
+      g.lineStyle(4, COLOR_TRUNK_STROKE, 1);
       g.beginPath();
-      g.moveTo(3, 0);
-      g.lineTo(9, 0);
-      g.lineTo(9, 13);
-      g.lineTo(12, 13);
-      g.lineTo(12, 18);
-      g.lineTo(12, 38);
-      g.lineTo(6, 50);
-      g.lineTo(0, 38);
-      g.lineTo(0, 18);
-      g.lineTo(0, 13);
-      g.lineTo(3, 13);
+      g.moveTo(12, 0);
+      g.lineTo(36, 0);
+      g.lineTo(36, 52);
+      g.lineTo(48, 52);
+      g.lineTo(48, 72);
+      g.lineTo(48, 152);
+      g.lineTo(24, 200);
+      g.lineTo(0, 152);
+      g.lineTo(0, 72);
+      g.lineTo(0, 52);
+      g.lineTo(12, 52);
       g.closePath();
       g.strokePath();
 
-      g.generateTexture("knife_blue", 12, 50);
+      g.generateTexture("knife_blue", 48, 200);
       g.destroy();
     }
 
-    // 3. Neutral Pre-embedded Obstacle Knife (Facing UP, slate guard & dark grip)
+    // 3. Neutral Pre-embedded Obstacle Knife (Facing UP, slate guard - 4x high-res 48x200)
     if (!this.textures.exists("knife_neutral")) {
       const g = this.make.graphics({ x: 0, y: 0 });
 
       // Steel blade
       g.fillStyle(COLOR_BLADE, 1);
       g.beginPath();
-      g.moveTo(6, 0); // Tip
-      g.lineTo(12, 12);
-      g.lineTo(12, 34);
-      g.lineTo(0, 34);
-      g.lineTo(0, 12);
+      g.moveTo(24, 0); // Tip
+      g.lineTo(48, 48);
+      g.lineTo(48, 136);
+      g.lineTo(0, 136);
+      g.lineTo(0, 48);
       g.closePath();
       g.fillPath();
 
       // Blade bevel
       g.fillStyle(COLOR_BLADE_BEVEL, 0.7);
       g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(12, 12);
-      g.lineTo(12, 34);
-      g.lineTo(6, 34);
+      g.moveTo(24, 0);
+      g.lineTo(48, 48);
+      g.lineTo(48, 136);
+      g.lineTo(24, 136);
       g.closePath();
       g.fillPath();
 
       // Slate obstacle guard
       g.fillStyle(0x64748b, 1);
-      g.fillRoundedRect(0, 32, 12, 5, 2);
+      g.fillRoundedRect(0, 128, 48, 20, 8);
 
       // Dark slate handle
       g.fillStyle(COLOR_HANDLE, 1);
-      g.fillRoundedRect(3, 37, 6, 13, 2);
+      g.fillRoundedRect(12, 148, 24, 52, 8);
 
-      // Black outline
-      g.lineStyle(1.5, COLOR_TRUNK_STROKE, 1);
+      // Pommel accent
+      g.fillStyle(0x475569, 1);
+      g.fillRoundedRect(10, 192, 28, 8, 4);
+
+      // Dark outline
+      g.lineStyle(4, COLOR_TRUNK_STROKE, 1);
       g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(12, 12);
-      g.lineTo(12, 32);
-      g.lineTo(12, 37);
-      g.lineTo(9, 37);
-      g.lineTo(9, 50);
-      g.lineTo(3, 50);
-      g.lineTo(3, 37);
-      g.lineTo(0, 37);
-      g.lineTo(0, 32);
-      g.lineTo(0, 12);
+      g.moveTo(24, 0);
+      g.lineTo(48, 48);
+      g.lineTo(48, 128);
+      g.lineTo(48, 148);
+      g.lineTo(36, 148);
+      g.lineTo(36, 200);
+      g.lineTo(12, 200);
+      g.lineTo(12, 148);
+      g.lineTo(0, 148);
+      g.lineTo(0, 128);
+      g.lineTo(0, 48);
       g.closePath();
       g.strokePath();
 
-      g.generateTexture("knife_neutral", 12, 50);
+      g.generateTexture("knife_neutral", 48, 200);
       g.destroy();
     }
 
-    // 4. Central Trunk Log Texture (Diameter 128)
+    // 4. Central Trunk Log Texture (High-Res 4x, radius 304 in 640x640 canvas)
     if (!this.textures.exists("trunk_wood")) {
-      const size = 128;
-      const r = TRUNK_RADIUS;
+      const size = 640;
+      const r = TRUNK_RADIUS * TEX_SCALE; // 76 * 4 = 304
       const cx = size / 2;
       const cy = size / 2;
       const g = this.make.graphics({ x: 0, y: 0 });
 
       // Drop shadow
-      g.fillStyle(0x000000, 0.12);
-      g.fillCircle(cx + 3, cy + 5, r);
+      g.fillStyle(0x000000, 0.14);
+      g.fillCircle(cx + 12, cy + 18, r);
 
-      // Bark rim
+      // Bark rim (dark outer bark ring)
       g.fillStyle(COLOR_TRUNK_BARK, 1);
       g.fillCircle(cx, cy, r);
 
-      // Oak wood face
+      // Subtle bark notches around outer perimeter
+      const notchCount = 32;
+      g.lineStyle(6, 0x3d2110, 0.85);
+      for (let i = 0; i < notchCount; i++) {
+        const theta = (i * Math.PI * 2) / notchCount;
+        const outerR = r;
+        const innerR = r - (i % 2 === 0 ? 16 : 10);
+        g.lineBetween(
+          cx + Math.cos(theta) * innerR,
+          cy + Math.sin(theta) * innerR,
+          cx + Math.cos(theta) * outerR,
+          cy + Math.sin(theta) * outerR
+        );
+      }
+
+      // Oak wood face (warm cut wood surface)
       g.fillStyle(COLOR_TRUNK_WOOD, 1);
-      g.fillCircle(cx, cy, r - 5);
+      g.fillCircle(cx, cy, r - 20);
 
       // Concentric growth rings
-      g.lineStyle(1.75, COLOR_TRUNK_RING, 0.65);
-      g.strokeCircle(cx, cy, r - 15);
-      g.strokeCircle(cx, cy, r - 28);
-      g.strokeCircle(cx, cy, r - 40);
+      g.lineStyle(6, COLOR_TRUNK_RING, 0.65);
+      g.strokeCircle(cx, cy, r - 58);
+      g.strokeCircle(cx, cy, r - 108);
+      g.strokeCircle(cx, cy, r - 162);
+      g.strokeCircle(cx, cy, r - 218);
 
-      // Wood heartwood core
+      // Radial wood grain rays
+      g.lineStyle(2.5, COLOR_TRUNK_RING, 0.35);
+      for (let i = 0; i < 12; i++) {
+        const theta = (i * Math.PI * 2) / 12 + 0.2;
+        g.lineBetween(
+          cx + Math.cos(theta) * 56,
+          cy + Math.sin(theta) * 56,
+          cx + Math.cos(theta) * (r - 26),
+          cy + Math.sin(theta) * (r - 26)
+        );
+      }
+
+      // Heartwood core
       g.fillStyle(COLOR_TRUNK_CORE, 1);
-      g.fillCircle(cx, cy, 12);
+      g.fillCircle(cx, cy, 48);
+
+      // Core center ring
+      g.lineStyle(4, COLOR_TRUNK_STROKE, 0.4);
+      g.strokeCircle(cx, cy, 26);
 
       // Bold perimeter border
-      g.lineStyle(TRUNK_STROKE_WIDTH, COLOR_TRUNK_STROKE, 1);
+      g.lineStyle(TRUNK_STROKE_WIDTH * TEX_SCALE, COLOR_TRUNK_STROKE, 1);
       g.strokeCircle(cx, cy, r);
 
       g.generateTexture("trunk_wood", size, size);
       g.destroy();
     }
 
-    // 4. Clash Spark Particle
+    // 5. Clash Spark Particle
     if (!this.textures.exists("clash_spark")) {
       const g = this.make.graphics({ x: 0, y: 0 });
       g.fillStyle(COLOR_SPARK, 1);
-      g.fillCircle(5, 5, 5);
-      g.generateTexture("clash_spark", 10, 10);
+      g.fillCircle(10, 10, 10);
+      g.generateTexture("clash_spark", 20, 20);
       g.destroy();
     }
 
-    // 5. Wood Chip Particle
+    // 6. Wood Chip Particle
     if (!this.textures.exists("wood_chip")) {
       const g = this.make.graphics({ x: 0, y: 0 });
       g.fillStyle(COLOR_WOOD_CHIP, 1);
-      g.fillRect(0, 0, 6, 6);
-      g.generateTexture("wood_chip", 6, 6);
+      g.fillRect(0, 0, 12, 12);
+      g.generateTexture("wood_chip", 12, 12);
       g.destroy();
     }
   }
@@ -456,15 +504,17 @@ export class KnifeThrowerScene extends Phaser.Scene {
     bg.lineStyle(2, COLOR_DIVIDER, 1);
     bg.lineBetween(16, TRUNK_CENTER_Y, GAME_WIDTH - 16, TRUNK_CENTER_Y);
 
-    // Subtle arena ring behind trunk
-    bg.lineStyle(1.5, COLOR_DIVIDER, 1);
-    bg.strokeCircle(TRUNK_CENTER_X, TRUNK_CENTER_Y, TRUNK_RADIUS + 24);
+    // Subtle arena concentric rings behind trunk
+    bg.lineStyle(1.5, COLOR_DIVIDER, 0.9);
+    bg.strokeCircle(TRUNK_CENTER_X, TRUNK_CENTER_Y, TRUNK_RADIUS + 26);
+    bg.lineStyle(1, COLOR_DIVIDER, 0.45);
+    bg.strokeCircle(TRUNK_CENTER_X, TRUNK_CENTER_Y, TRUNK_RADIUS + 50);
 
     // Player side subtle indicator dots
-    bg.fillStyle(COLOR_BLUE, 0.12);
+    bg.fillStyle(COLOR_BLUE, 0.1);
     bg.fillCircle(TRUNK_CENTER_X, 38, 22);
 
-    bg.fillStyle(COLOR_ORANGE, 0.12);
+    bg.fillStyle(COLOR_ORANGE, 0.1);
     bg.fillCircle(TRUNK_CENTER_X, GAME_HEIGHT - 38, 22);
   }
 
@@ -553,6 +603,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
         RED_KNIFE_SPAWN_Y,
         "knife_orange"
       );
+      this.readyOrangeKnife.setScale(KNIFE_SCALE);
       this.readyOrangeKnife.setOrigin(0.5, 0);
       this.readyOrangeKnife.setDepth(20);
       this.orangeCanThrow = true;
@@ -563,6 +614,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
         BLUE_KNIFE_SPAWN_Y,
         "knife_blue"
       );
+      this.readyBlueKnife.setScale(KNIFE_SCALE);
       this.readyBlueKnife.setOrigin(0.5, 1);
       this.readyBlueKnife.setDepth(20);
       this.blueCanThrow = true;
@@ -686,8 +738,8 @@ export class KnifeThrowerScene extends Phaser.Scene {
     // Wood chip particle burst
     const hitY =
       player === "orange"
-        ? TRUNK_CENTER_Y + TRUNK_RADIUS - 6
-        : TRUNK_CENTER_Y - TRUNK_RADIUS + 6;
+        ? TRUNK_CENTER_Y + TRUNK_RADIUS - 8
+        : TRUNK_CENTER_Y - TRUNK_RADIUS + 8;
     this.woodChipEmitter.emitParticleAt(TRUNK_CENTER_X, hitY, 6);
 
     // Trunk tremble / micro-shake
@@ -723,7 +775,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
         : owner === "blue"
         ? "knife_blue"
         : "knife_neutral";
-    const sprite = this.add.image(0, 0, texture);
+    const sprite = this.add.image(0, 0, texture).setScale(KNIFE_SCALE);
 
     // Anchor so blade penetrates ~10px into the trunk
     if (owner === "blue") {
@@ -783,8 +835,8 @@ export class KnifeThrowerScene extends Phaser.Scene {
     // Sparks at collision contact point
     const contactY =
       clashingPlayer === "orange"
-        ? TRUNK_CENTER_Y + TRUNK_RADIUS - 6
-        : TRUNK_CENTER_Y - TRUNK_RADIUS + 6;
+        ? TRUNK_CENTER_Y + TRUNK_RADIUS - 8
+        : TRUNK_CENTER_Y - TRUNK_RADIUS + 8;
     this.sparkEmitter.emitParticleAt(TRUNK_CENTER_X, contactY, 18);
 
     // Deflect colliding knife backwards with tumble spin
@@ -863,6 +915,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
           ? "knife_blue"
           : "knife_neutral";
       const detached = this.add.image(worldPos.x, worldPos.y, texture);
+      detached.setScale(KNIFE_SCALE);
       detached.setDepth(22);
       detached.rotation = item.container.rotation + this.trunkContainer.rotation;
 
@@ -917,7 +970,7 @@ export class KnifeThrowerScene extends Phaser.Scene {
     this.embeddedKnives = [];
 
     // 2. Re-add disk
-    this.trunkDisk = this.add.image(0, 0, "trunk_wood");
+    this.trunkDisk = this.add.image(0, 0, "trunk_wood").setScale(TRUNK_SCALE);
     this.trunkDisk.setVisible(true);
     this.trunkContainer.add(this.trunkDisk);
     this.trunkContainer.rotation = 0;
