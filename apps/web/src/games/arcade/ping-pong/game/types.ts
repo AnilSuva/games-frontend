@@ -33,6 +33,7 @@ export interface Ball {
   trailGraphics?: Phaser.GameObjects.Graphics;
   targetX?: number;
   targetY?: number;
+  isHardDirectHit?: boolean;
 }
 
 export interface BounceRipple {

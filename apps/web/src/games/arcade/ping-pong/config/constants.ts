@@ -25,14 +25,16 @@ export const PADDLE_KEYBOARD_SPEED = 420;
 // Ball & physics constants (Scale Overhaul: radius >= 12px)
 export const BALL_RADIUS = 13;
 export const BALL_STROKE_WIDTH = 6;
-export const INITIAL_BALL_SPEED = 320;
-export const MIN_BALL_SPEED = 240;
-export const MAX_BALL_SPEED = 780;
+export const INITIAL_BALL_SPEED = 380;
+export const MIN_BALL_SPEED = 300;
+export const MAX_BALL_SPEED = 860;
 export const WINNING_SCORE = 5;
 
 // Dynamic physics parameters & Feel
 export const PADDLE_VELOCITY_INFLUENCE = 0.35;
 export const SMASH_FORWARD_THRESHOLD = 140; // Forward swipe velocity threshold
+export const HARD_SMASH_FORWARD_THRESHOLD = 210; // Overpowered forward smash threshold that can fly out
+export const HARD_HIT_SPEED_THRESHOLD = 580; // Speed threshold where a direct smash can fly out of bounds
 export const BALL_DRAG_DECAY = 0.9975; // Linear damping/friction so massive smashes gradually slow down
 export const MAGNUS_FORCE = 0.00075;
 export const SPIN_DECAY = 0.985;
@@ -41,6 +43,7 @@ export const MAX_SPIN = 30;
 // Visual & simulated Z-axis parameters
 export const TRAIL_MAX_LENGTH = 70;
 export const Z_PEAK_HEIGHT = 1.0;
+export const AIRTIME_EXPONENT = 0.65;
 
 // Bold minimalist palette matching reference styling
 export const COLOR_BG = 0xf4d07b; // Soft yellow/tan outer floor

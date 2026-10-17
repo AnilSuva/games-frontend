@@ -134,6 +134,26 @@ function GameTileIllustration({ id }: { id: string }) {
           </div>
         </div>
       );
+    case "knife-thrower":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
+          <div className="relative w-16 h-20 flex flex-col items-center justify-between">
+            <div className="w-2.5 h-4.5 rounded-xs bg-[#e2e8f0] border border-[#1c1917] flex flex-col items-center">
+              <div className="w-2 h-1.5 bg-[#334155] rounded-xs" />
+              <div className="w-4 h-1 bg-[#2563eb]" />
+            </div>
+            <div className="relative w-11 h-11 rounded-full bg-[#dca56d] border-[3px] border-[#8c5627] flex items-center justify-center shadow-xs">
+              <div className="w-6 h-6 rounded-full border border-[#bf854e]" />
+              <div className="w-2 h-2 rounded-full bg-[#9c612f]" />
+              <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-1.5 bg-[#e0530a] rounded-xs border border-[#1c1917]" />
+            </div>
+            <div className="w-2.5 h-4.5 rounded-xs bg-[#e2e8f0] border border-[#1c1917] flex flex-col items-center">
+              <div className="w-4 h-1 bg-[#e0530a]" />
+              <div className="w-2 h-1.5 bg-[#334155] rounded-xs" />
+            </div>
+          </div>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-full max-w-[80px] max-h-[80px] flex items-center justify-center text-[#9c978e]">

@@ -25,10 +25,13 @@ import {
   WINNING_SCORE,
   PADDLE_VELOCITY_INFLUENCE,
   SMASH_FORWARD_THRESHOLD,
+  HARD_SMASH_FORWARD_THRESHOLD,
+  HARD_HIT_SPEED_THRESHOLD,
   BALL_DRAG_DECAY,
   MAGNUS_FORCE,
   SPIN_DECAY,
   MAX_SPIN,
+  AIRTIME_EXPONENT,
   COLOR_BG,
   COLOR_TABLE,
   COLOR_STROKE,
@@ -438,10 +441,11 @@ export class PingPongScene extends Phaser.Scene {
       zHeight: 0,
       zPhase: "paddle_to_bounce",
       startY: NET_Y,
-      targetBounceY: NET_Y + 95,
+      targetBounceY: NET_Y + 110,
       targetPaddleY: BOTTOM_PADDLE_Y,
       trailLength: 0,
       active: false,
+      isHardDirectHit: false,
       graphics,
       shadowGraphics,
     };
@@ -461,17 +465,18 @@ export class PingPongScene extends Phaser.Scene {
     this.ball.zHeight = 0.15;
     this.ball.zPhase = "paddle_to_bounce";
     this.ball.startY = startY;
-    this.ball.targetBounceY = isOrangeServer ? (NET_Y - 95) : (NET_Y + 95);
+    this.ball.targetBounceY = isOrangeServer ? (NET_Y - 110) : (NET_Y + 110);
     this.ball.targetPaddleY = isOrangeServer ? TOP_PADDLE_Y : BOTTOM_PADDLE_Y;
     this.ball.trailLength = 0;
     this.ball.active = true;
+    this.ball.isHardDirectHit = false;
 
     this.lastHitBy = server;
     this.hasBouncedOnReceiverSide = false;
 
     // Launch speed towards opponent with subtle angle
     const dirY = isOrangeServer ? -1 : 1;
-    const angleOffset = (Math.random() - 0.5) * 0.26;
+    const angleOffset = (Math.random() - 0.5) * 0.22;
     this.ball.vx = INITIAL_BALL_SPEED * Math.sin(angleOffset);
     this.ball.vy = dirY * INITIAL_BALL_SPEED * Math.cos(angleOffset);
 
@@ -624,7 +629,7 @@ export class PingPongScene extends Phaser.Scene {
       this.ball.vy = (this.ball.vy / currentSpeed) * dampedSpeed;
     }
 
-    // 3. Move Ball (NO SIDE WALL BOUNCING - FREE AIR TRAJECTORY)
+    // 3. Move Ball (Free air trajectory across table - no border bouncing)
     this.ball.x += this.ball.vx * dt;
     this.ball.y += this.ball.vy * dt;
 
@@ -646,7 +651,8 @@ export class PingPongScene extends Phaser.Scene {
       const traveled = Math.abs(this.ball.y - this.ball.startY);
       const progress = totalDist > 0 ? Phaser.Math.Clamp(traveled / totalDist, 0, 1) : 1;
 
-      this.ball.zHeight = Math.sin(Math.PI * progress);
+      // Extended hang-time in air: AIRTIME_EXPONENT gives a broad elevated crest
+      this.ball.zHeight = Math.pow(Math.sin(Math.PI * progress), AIRTIME_EXPONENT);
 
       // Check if ball has arrived at the bounce plane
       const passedBouncePoint =
@@ -671,6 +677,7 @@ export class PingPongScene extends Phaser.Scene {
 
           // Table surface strike: trigger ripple, reset height, start upward bounce arc
           this.ball.zHeight = 0;
+          this.ball.isHardDirectHit = false; // Bounced on table! Can no longer fly out of bounds directly
           this.triggerBounceRipple(this.ball.x, this.ball.y);
           this.ball.zPhase = "bounce_to_paddle";
           this.ball.startY = this.ball.targetBounceY;
@@ -682,17 +689,16 @@ export class PingPongScene extends Phaser.Scene {
       const traveled = Math.abs(this.ball.y - this.ball.startY);
       const progress = totalDist > 0 ? Phaser.Math.Clamp(traveled / totalDist, 0, 1) : 1;
 
-      this.ball.zHeight = Math.sin(Math.PI * progress) * 0.72;
+      this.ball.zHeight = Math.pow(Math.sin(Math.PI * progress), 0.72) * 0.70;
     }
   }
 
   /**
    * Custom Arcade Collision Resolution:
-   * 1. Relative Impact Angle:
-   *    - Exact center hit bounces straight back.
-   *    - Far left/right edge hit aggressively multiplies vx into sharp exit angles.
-   * 2. Velocity Transfer (Smash):
-   *    - Swiping forward towards the net adds massive speed boost, screen shake, and spark bursts.
+   * 1. Active Center Aim Assist:
+   *    - The middle 75% of the racket actively steers trajectories towards table center (180).
+   * 2. Overpowered Hard Smash:
+   *    - Only hard forward smashes or extreme edge/swipe strikes can fly out of bounds directly.
    */
   private checkPaddleCollisions() {
     // Orange Racket (Bottom) - Only hit when ball travels downward towards Orange
@@ -728,61 +734,76 @@ export class PingPongScene extends Phaser.Scene {
       const isForwardSmash = forwardVelocity > SMASH_FORWARD_THRESHOLD;
 
       if (isForwardSmash) {
-        // Massive velocity boost on forward smash
+        // Velocity boost on forward smash
         const smashBoost = Math.min(260, forwardVelocity * 0.52);
         baseSpeed += smashBoost;
 
         // Screen shake & heavy spark burst for impactful game feel
-        if (forwardVelocity > 250 || baseSpeed > 520) {
+        if (forwardVelocity > 250 || baseSpeed > 500) {
           this.cameras.main.shake(100, 0.012);
           this.triggerImpactSparks(this.ball.x, this.ball.y, 1.0);
         } else {
           this.triggerImpactSparks(this.ball.x, this.ball.y, 0.5);
         }
-      } else if (baseSpeed > 380) {
+      } else if (baseSpeed > 360) {
         this.triggerImpactSparks(this.ball.x, this.ball.y, 0.35);
       }
 
       const exitSpeed = Phaser.Math.Clamp(baseSpeed, MIN_BALL_SPEED, MAX_BALL_SPEED);
 
-      // 3. Center Aim Assist (Forgiving Physics):
-      // - Middle 60% of paddle (absRelativeX <= 0.60): severely dampen resulting X velocity (vx *= 0.2)
-      //   using non-linear cubic curve Math.pow(relativeX, 3). Forcefully aims ball straight to opponent center!
-      // - Overrides:
-      //   1. Extreme outer 20% edge of racket (absRelativeX >= 0.80)
-      //   2. High lateral paddle velocity (|paddle.vx| > 160, player intentionally swiping hard left/right)
-      const hasHighLateralSwipe = Math.abs(paddle.vx) > 160;
-      const isExtremeEdgeHit = absRelativeX >= 0.80;
-      const isMiddle60Percent = absRelativeX <= 0.60;
+      // Determine if this qualifies as a hard direct hit that can fly out of bounds:
+      // Must be struck with an overpowered smash, high speed threshold, or violent lateral swipe
+      const isHardDirectHit =
+        (isForwardSmash && forwardVelocity > HARD_SMASH_FORWARD_THRESHOLD) ||
+        exitSpeed >= HARD_HIT_SPEED_THRESHOLD ||
+        Math.abs(paddle.vx) > 300;
+
+      this.ball.isHardDirectHit = isHardDirectHit;
+
+      // 3. Center Aim Assist (Forgiving Physics & Active Center Guidance):
+      // - Middle 75% of paddle (absRelativeX <= 0.75): actively guides trajectory toward table center (180)!
+      // - Transition zone (0.75 < absRelativeX < 0.85)
+      // - Outer 15% edge (absRelativeX >= 0.85) or High lateral swipe (|paddle.vx| > 200) allows sharp deflections
+      const hasHighLateralSwipe = Math.abs(paddle.vx) > 200;
+      const isExtremeEdgeHit = absRelativeX >= 0.85;
+      const isMiddle75Percent = absRelativeX <= 0.75;
 
       let exitVx = 0;
 
       if (isExtremeEdgeHit || hasHighLateralSwipe) {
-        // Sharp sideways deflection allowed!
-        const maxAngleRad = 0.94; // ~54 degrees
+        // Sharp sideways deflection allowed for intentional edge cuts & hard lateral swipes
+        const maxAngleRad = 0.88;
         const angle = Math.sign(relativeX) * Math.pow(absRelativeX, 0.85) * maxAngleRad;
         exitVx = exitSpeed * Math.sin(angle);
 
         if (hasHighLateralSwipe) {
-          exitVx += paddle.vx * PADDLE_VELOCITY_INFLUENCE * 0.55;
+          exitVx += paddle.vx * PADDLE_VELOCITY_INFLUENCE * 0.5;
         }
-      } else if (isMiddle60Percent) {
-        // "Deadzone" Aim Assist:
-        // Dampen resulting X velocity (vx *= 0.2) and apply cubic curve Math.pow(relativeX, 3)
-        // Forcefully aims the ball back toward the center of the opponent's side
-        const rawVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.5);
-        exitVx = rawVx * 0.2;
+      } else if (isMiddle75Percent) {
+        // Active Center Aim Assist:
+        // Calculate angle pointing directly toward the center line of the opponent's court
+        const tableCenterX = GAME_WIDTH / 2; // 180
+        const targetCenterY = newDirY < 0 ? (NET_Y - 110) : (NET_Y + 110);
+        const dxToCenter = tableCenterX - this.ball.x;
+        const dyToCenter = targetCenterY - this.ball.y;
+        const centerAngle = Math.atan2(dxToCenter, Math.abs(dyToCenter));
+
+        // Aim assist factor: 1.0 at paddle center, softly decreasing towards boundary of deadzone
+        const aimFactor = Math.cos((absRelativeX / 0.75) * (Math.PI / 2));
+        const centerGuidedVx = exitSpeed * Math.sin(centerAngle) * 0.95;
+        const offsetVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.35) * 0.15;
+        exitVx = Phaser.Math.Linear(offsetVx, centerGuidedVx, aimFactor);
       } else {
-        // Smooth transition zone between 60% and 80%
-        const t = (absRelativeX - 0.60) / 0.20;
-        const deadzoneVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.5) * 0.2;
-        const outerAngle = Math.sign(relativeX) * 0.55;
-        const outerVx = exitSpeed * Math.sin(outerAngle);
-        exitVx = Phaser.Math.Linear(deadzoneVx, outerVx, t);
+        // Smooth transition zone between 75% and 85%
+        const t = (absRelativeX - 0.75) / 0.10;
+        const offsetVx = exitSpeed * Math.sin(Math.pow(relativeX, 3) * 0.35) * 0.15;
+        const edgeAngle = Math.sign(relativeX) * 0.45;
+        const edgeVx = exitSpeed * Math.sin(edgeAngle);
+        exitVx = Phaser.Math.Linear(offsetVx, edgeVx, t);
       }
 
       // Clamp exitVx so forward progression is always maintained
-      exitVx = Phaser.Math.Clamp(exitVx, -exitSpeed * 0.82, exitSpeed * 0.82);
+      exitVx = Phaser.Math.Clamp(exitVx, -exitSpeed * 0.80, exitSpeed * 0.80);
 
       // Derive forward Vy so total magnitude matches exitSpeed
       const remainingSpeedSq = Math.max(0, exitSpeed * exitSpeed - exitVx * exitVx);
@@ -793,8 +814,8 @@ export class PingPongScene extends Phaser.Scene {
 
       // Magnus spin from lateral swipe or edge cut
       const cutSpin = hasHighLateralSwipe
-        ? paddle.vx * 0.06 + relativeX * 8
-        : (isExtremeEdgeHit ? relativeX * 10 : relativeX * 2);
+        ? paddle.vx * 0.05 + relativeX * 6
+        : (isExtremeEdgeHit ? relativeX * 8 : relativeX * 1.5);
       this.ball.spin = Phaser.Math.Clamp(cutSpin, -MAX_SPIN, MAX_SPIN);
 
       // Play hit audio
@@ -809,7 +830,7 @@ export class PingPongScene extends Phaser.Scene {
       this.hasBouncedOnReceiverSide = false;
       this.ball.zPhase = "paddle_to_bounce";
       this.ball.startY = paddle.y;
-      this.ball.targetBounceY = newDirY < 0 ? (NET_Y - 95) : (NET_Y + 95);
+      this.ball.targetBounceY = newDirY < 0 ? (NET_Y - 110) : (NET_Y + 110);
       this.ball.targetPaddleY = newDirY < 0 ? TOP_PADDLE_Y : BOTTOM_PADDLE_Y;
 
       // Immediate bounce sync packet on Host
@@ -994,11 +1015,11 @@ export class PingPongScene extends Phaser.Scene {
       }
     }
 
-    // 2. Dynamic Drop Shadow on Table (Depth Illusion)
-    const shadowDistX = 3 + 12 * this.ball.zHeight;
-    const shadowDistY = 5 + 18 * this.ball.zHeight;
-    const shadowAlpha = 0.32 * (1 - 0.6 * this.ball.zHeight);
-    const shadowRadius = BALL_RADIUS * (0.95 - 0.22 * this.ball.zHeight);
+    // 2. Dynamic Drop Shadow on Table (Airtime & 3D Depth Illusion)
+    const shadowDistX = 4 + 16 * this.ball.zHeight;
+    const shadowDistY = 6 + 22 * this.ball.zHeight;
+    const shadowAlpha = 0.34 * (1 - 0.7 * this.ball.zHeight);
+    const shadowRadius = BALL_RADIUS * (0.95 - 0.25 * this.ball.zHeight);
 
     this.ball.shadowGraphics.fillStyle(0x000000, shadowAlpha);
     this.ball.shadowGraphics.fillCircle(
@@ -1008,7 +1029,7 @@ export class PingPongScene extends Phaser.Scene {
     );
 
     // 3. Scaled Ball Body: White with bold 6px black outline
-    const visualRadius = BALL_RADIUS * (1 + 0.35 * this.ball.zHeight);
+    const visualRadius = BALL_RADIUS * (1 + 0.42 * this.ball.zHeight);
     this.ball.graphics.fillStyle(COLOR_BALL, 1);
     this.ball.graphics.fillCircle(this.ball.x, this.ball.y, visualRadius);
     this.ball.graphics.lineStyle(BALL_STROKE_WIDTH, COLOR_STROKE, 1);

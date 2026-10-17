@@ -128,6 +128,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/arcade/ping-pong/components/PingPongGame"),
   },
   {
+    id: "knife-thrower",
+    title: "Knife Thrower",
+    shortDescription: "Head-to-head 2-player spinning trunk knife duel.",
+    description:
+      "Throw knives from opposite sides into a shared rotating trunk. Embed your blades without hitting existing knives in tense local 2-player or bot matches.",
+    category: "arcade",
+    engine: "phaser",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot"],
+    defaultOrientation: "portrait",
+    aspectRatio: "4/3",
+    iconName: "target",
+    badgeText: "New",
+    tags: ["Arcade", "2-Player", "Duel", "Reflexes", "Timing"],
+    loader: () =>
+      import("@/games/arcade/knife-thrower/components/KnifeThrowerGame"),
+  },
+  {
     id: "archery",
     title: "Archery",
     shortDescription: "Precision target shooting with dynamic wind.",

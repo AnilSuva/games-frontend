@@ -42,3 +42,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# packages / binary archives
+*.apk
+*.apkm
+*.xapk
+

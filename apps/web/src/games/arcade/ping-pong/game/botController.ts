@@ -34,16 +34,16 @@ export class PingPongBotController {
     }
 
     // Reaction parameters based on difficulty
-    let maxSpeed = 360;
+    let maxSpeed = 420;
     let errorRange = 14;
     let predictCurve = false;
 
     if (this.difficulty === "easy") {
-      maxSpeed = 240;
+      maxSpeed = 280;
       errorRange = 36;
       predictCurve = false;
     } else if (this.difficulty === "hard") {
-      maxSpeed = 520;
+      maxSpeed = 580;
       errorRange = 4;
       predictCurve = true;
     }
@@ -68,14 +68,8 @@ export class PingPongBotController {
         predictedX += Math.sign(ball.spin) * 28;
       }
 
-      // Handle table wall rebounds
-      while (predictedX < minX || predictedX > maxX) {
-        if (predictedX < minX) {
-          predictedX = minX + (minX - predictedX);
-        } else if (predictedX > maxX) {
-          predictedX = maxX - (predictedX - maxX);
-        }
-      }
+      // Clamp target within paddle reachable court bounds (no wall rebounds)
+      predictedX = Math.max(minX, Math.min(maxX, predictedX));
 
       targetX = predictedX + this.targetOffset;
 
