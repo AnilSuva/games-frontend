@@ -32,6 +32,7 @@ import {
   angularDistance,
   calculateHitAngle,
   isAngleClashing,
+  findTrunkGaps,
   TrunkRotator,
   ROTATION_PROFILES,
 } from "../src/games/arcade/knife-thrower/game/rotationProfiles.ts";
@@ -188,6 +189,93 @@ test("Knife Thrower AI Bot: evaluates trajectory, rejects clashing angles, and s
   }
   assert.equal(thrown, true, "Bot must throw when trunk sector is completely clear");
 });
+
+test("Knife Thrower Gap Analysis: accurately identifies circular openings between embedded blades", () => {
+  const twoPi = Math.PI * 2;
+
+  // 1. Empty trunk returns full circle gap
+  const emptyGaps = findTrunkGaps([]);
+  assert.equal(emptyGaps.length, 1);
+  assert.ok(Math.abs(emptyGaps[0].size - twoPi) < 1e-9);
+
+  // 2. 1 knife at angle 0
+  const singleGaps = findTrunkGaps([0]);
+  assert.equal(singleGaps.length, 1);
+  assert.ok(Math.abs(singleGaps[0].size - twoPi) < 1e-9);
+  assert.ok(Math.abs(singleGaps[0].centerAngle - Math.PI) < 1e-9);
+
+  // 3. 4 cardinal knives at 0, PI/2, PI, 3*PI/2
+  const cardinalGaps = findTrunkGaps([0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2]);
+  assert.equal(cardinalGaps.length, 4);
+  for (const gap of cardinalGaps) {
+    assert.ok(Math.abs(gap.size - Math.PI / 2) < 1e-9);
+  }
+  const totalSize = cardinalGaps.reduce((sum, g) => sum + g.size, 0);
+  assert.ok(Math.abs(totalSize - twoPi) < 1e-9);
+});
+
+test("Knife Thrower AI Bot: throws when there is no space in log and never freezes the match", () => {
+  // Setup 16 evenly spaced embedded knives on the trunk (every 22.5 degrees / ~0.39 rad)
+  // Since clash threshold is ~0.26 rad, each knife needs 0.52 rad clearance.
+  // With 0.39 rad gaps, there is physically NO space on the log anywhere without clashing.
+  const fullLogAngles = Array.from({ length: 16 }, (_, i) => (i * Math.PI * 2) / 16);
+
+  // Test Medium Bot specifically (as reported by user)
+  const botMedium = new KnifeThrowerBot({ difficulty: "medium" });
+
+  let threwWhenNoSpace = false;
+  let framesElapsed = 0;
+  let currentRot = 0;
+
+  for (let frame = 0; frame < 90; frame++) {
+    currentRot += 2.0 * 0.016;
+    framesElapsed++;
+    if (botMedium.update(0.016, currentRot, 2.0, fullLogAngles, true)) {
+      threwWhenNoSpace = true;
+      break;
+    }
+  }
+
+  assert.equal(
+    threwWhenNoSpace,
+    true,
+    "Medium bot must throw when there is no space in log instead of stalling indefinitely"
+  );
+  assert.ok(
+    framesElapsed >= 15,
+    `Bot should apply human latency before throwing (took ${framesElapsed} frames)`
+  );
+  assert.ok(
+    framesElapsed <= 80,
+    `Bot should not stall excessively before throwing into crowded log (took ${framesElapsed} frames)`
+  );
+
+  // Test Hard and Easy bots also throw when there is no space
+  const botHard = new KnifeThrowerBot({ difficulty: "hard" });
+  let hardThrew = false;
+  currentRot = 0;
+  for (let frame = 0; frame < 90; frame++) {
+    currentRot += 2.0 * 0.016;
+    if (botHard.update(0.016, currentRot, 2.0, fullLogAngles, true)) {
+      hardThrew = true;
+      break;
+    }
+  }
+  assert.equal(hardThrew, true, "Hard bot must throw when there is no space in log");
+
+  const botEasy = new KnifeThrowerBot({ difficulty: "easy" });
+  let easyThrew = false;
+  currentRot = 0;
+  for (let frame = 0; frame < 120; frame++) {
+    currentRot += 2.0 * 0.016;
+    if (botEasy.update(0.016, currentRot, 2.0, fullLogAngles, true)) {
+      easyThrew = true;
+      break;
+    }
+  }
+  assert.equal(easyThrew, true, "Easy bot must throw when there is no space in log");
+});
+
 
 test("Knife Thrower Reference Level Design: verifies 8 default obstacle knife layout from base.apk Sword Default 1..8", () => {
   assert.equal(DEFAULT_KNIFE_ANGLES.length, 8);

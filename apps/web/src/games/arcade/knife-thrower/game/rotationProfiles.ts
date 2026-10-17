@@ -50,6 +50,66 @@ export function isAngleClashing(
   return false;
 }
 
+export interface TrunkGap {
+  startAngle: number;
+  endAngle: number;
+  size: number;
+  centerAngle: number;
+}
+
+/**
+ * Calculates all open angular gaps between embedded knives on the rotating trunk.
+ */
+export function findTrunkGaps(embeddedAngles: number[]): TrunkGap[] {
+  if (embeddedAngles.length === 0) {
+    return [
+      {
+        startAngle: 0,
+        endAngle: Math.PI * 2,
+        size: Math.PI * 2,
+        centerAngle: Math.PI,
+      },
+    ];
+  }
+
+  if (embeddedAngles.length === 1) {
+    const single = normalizeAngle(embeddedAngles[0]);
+    return [
+      {
+        startAngle: single,
+        endAngle: single,
+        size: Math.PI * 2,
+        centerAngle: normalizeAngle(single + Math.PI),
+      },
+    ];
+  }
+
+  const normalized = embeddedAngles
+    .map((a) => normalizeAngle(a))
+    .sort((a, b) => a - b);
+
+  const gaps: TrunkGap[] = [];
+  const twoPi = Math.PI * 2;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const current = normalized[i];
+    const next = i === normalized.length - 1 ? normalized[0] : normalized[i + 1];
+    const size =
+      i === normalized.length - 1 ? twoPi - current + next : next - current;
+
+    const centerAngle = normalizeAngle(current + size / 2);
+    gaps.push({
+      startAngle: current,
+      endAngle: next,
+      size,
+      centerAngle,
+    });
+  }
+
+  return gaps;
+}
+
+
 export interface RotatorStep {
   speed: number; // in rad/sec
   duration: number; // in seconds
