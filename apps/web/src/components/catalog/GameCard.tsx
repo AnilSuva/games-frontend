@@ -164,6 +164,51 @@ function GameIllustration({ id }: { id: string }) {
           </svg>
         </div>
       );
+    case "star-catcher":
+      return (
+        <div className="w-full h-24 rounded-lg bg-[#090d16] border border-[#1e293b] flex items-center justify-center p-2 relative overflow-hidden">
+          <svg className="w-auto h-20 max-w-full" viewBox="0 0 96 72" fill="none">
+            {/* Background stars */}
+            <circle cx="16" cy="18" r="1" fill="#ffffff" fillOpacity="0.6" />
+            <circle cx="82" cy="14" r="1.2" fill="#ffffff" fillOpacity="0.7" />
+            <circle cx="24" cy="56" r="1" fill="#ffffff" fillOpacity="0.5" />
+            <circle cx="80" cy="58" r="0.8" fill="#ffffff" fillOpacity="0.6" />
+            <circle cx="50" cy="8" r="1" fill="#ffffff" fillOpacity="0.4" />
+
+            {/* Glowing Golden Star in Center */}
+            <g transform="translate(48, 36)">
+              <circle cx="0" cy="0" r="10" fill="#f59e0b" fillOpacity="0.25" />
+              <polygon
+                points="0,-10 3,-3 10,-2 5,3 6,10 0,6 -6,10 -5,3 -10,-2 -3,-3"
+                fill="#fbbf24"
+                stroke="#d97706"
+                strokeWidth="1.2"
+              />
+              <circle cx="0" cy="0" r="2.5" fill="#fffbeb" />
+            </g>
+
+            {/* Blue Spaceship (Top-Left soaring toward star) */}
+            <g transform="translate(26, 22) rotate(38)">
+              {/* Twin thruster flames */}
+              <polygon points="-8,-3 -14,-3 -11,0" fill="#38bdf8" />
+              <polygon points="-8,3 -14,3 -11,0" fill="#38bdf8" />
+              {/* Hull */}
+              <polygon points="12,0 -8,9 -4,0 -8,-9" fill="#2563eb" stroke="#1e293b" strokeWidth="1.5" />
+              <polygon points="2,0 -4,3 -2,0 -4,-3" fill="#bfdbfe" />
+            </g>
+
+            {/* Orange Spaceship (Bottom-Right soaring toward star) */}
+            <g transform="translate(70, 50) rotate(-142)">
+              {/* Twin thruster flames */}
+              <polygon points="-8,-3 -14,-3 -11,0" fill="#f97316" />
+              <polygon points="-8,3 -14,3 -11,0" fill="#f97316" />
+              {/* Hull */}
+              <polygon points="12,0 -8,9 -4,0 -8,-9" fill="#e0530a" stroke="#1e293b" strokeWidth="1.5" />
+              <polygon points="2,0 -4,3 -2,0 -4,-3" fill="#fed7aa" />
+            </g>
+          </svg>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center text-[#9c978e]">

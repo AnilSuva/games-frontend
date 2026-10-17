@@ -14,10 +14,10 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
   const allGames = getAllGames();
   const visibleGames = getVisibleGames();
 
-  assert.equal(allGames.length, 7, "Visible games and tools should appear in the catalog");
-  assert.equal(visibleGames.length, 7);
+  assert.equal(allGames.length, 8, "Visible games and tools should appear in the catalog");
+  assert.equal(visibleGames.length, 8);
 
-  const expectedIds = ["tic-tac-toe", "connect-four", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower"];
+  const expectedIds = ["tic-tac-toe", "connect-four", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher"];
   const returnedIds = allGames.map((g) => g.id);
   assert.deepEqual(returnedIds.sort(), expectedIds.sort());
 
@@ -48,7 +48,7 @@ test("Registry: categories only contain visible playable games", () => {
   const arcadeIds = arcadeGames.map((g) => g.id).sort();
 
   assert.deepEqual(boardIds, ["checkers", "connect-four", "tic-tac-toe"]);
-  assert.deepEqual(arcadeIds, ["brick-blast", "knife-thrower", "ping-pong"]);
+  assert.deepEqual(arcadeIds, ["brick-blast", "knife-thrower", "ping-pong", "star-catcher"]);
   assert.deepEqual(randomRoyaleTools.map((game) => game.id), ["spin-wheel"]);
 
   assert.ok(!boardIds.includes("chess"));
@@ -71,6 +71,8 @@ test("Registry: getGameMetadata returns undefined for unfinished games (protecti
   assert.equal(getGameMetadata("ping-pong")?.title, "Ping Pong");
   assert.ok(getGameMetadata("knife-thrower") !== undefined);
   assert.equal(getGameMetadata("knife-thrower")?.title, "Knife Thrower");
+  assert.ok(getGameMetadata("star-catcher") !== undefined);
+  assert.equal(getGameMetadata("star-catcher")?.title, "Star Catcher");
   assert.equal(getGameMetadata("spin-wheel")?.title, "Spin Wheel");
 
   // Unfinished games must return undefined so dynamic route triggers 404 notFound()
@@ -98,5 +100,5 @@ test("Registry: unreleased definitions are preserved in master registry for futu
 
 test("Registry: getAllAvailableGameIds matches playable games for static params", () => {
   const ids = getAllAvailableGameIds();
-  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "knife-thrower", "ping-pong", "spin-wheel", "tic-tac-toe"]);
+  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "knife-thrower", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe"]);
 });

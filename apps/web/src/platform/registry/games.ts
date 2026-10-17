@@ -147,6 +147,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/arcade/knife-thrower/components/KnifeThrowerGame"),
   },
   {
+    id: "star-catcher",
+    title: "Star Catcher",
+    shortDescription: "High-speed 2-player spaceship dogfight for stars.",
+    description:
+      "Pilot starfighters in cosmic space drift duels. Collect radiant stars while navigating screen-warp boundaries, gravitational black holes, and drifting asteroids.",
+    category: "arcade",
+    engine: "phaser",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot"],
+    defaultOrientation: "portrait",
+    aspectRatio: "4/3",
+    iconName: "zap",
+    badgeText: "New",
+    tags: ["Arcade", "Space", "Physics", "2-Player", "Duel"],
+    loader: () =>
+      import("@/games/arcade/star-catcher/components/StarCatcherGame"),
+  },
+  {
     id: "archery",
     title: "Archery",
     shortDescription: "Precision target shooting with dynamic wind.",

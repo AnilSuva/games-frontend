@@ -28,4 +28,7 @@ export const CARTRIDGE_MAP: Record<
   "knife-thrower": React.lazy(
     () => import("@/games/arcade/knife-thrower/components/KnifeThrowerGame")
   ),
+  "star-catcher": React.lazy(
+    () => import("@/games/arcade/star-catcher/components/StarCatcherGame")
+  ),
 };
