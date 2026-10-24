@@ -123,6 +123,32 @@ function GameTileIllustration({ id }: { id: string }) {
           <div className="w-10 h-10 rounded-full border-2 border-[#2563eb] bg-[#eff6ff] flex items-center justify-center text-lg font-bold text-[#2563eb] shrink-0">●</div>
         </div>
       );
+    case "dots-and-boxes":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[112px] flex items-center justify-center">
+          <svg className="w-full h-full max-w-[80px] max-h-[80px]" viewBox="0 0 60 60" fill="none">
+            <rect x="12" y="12" width="18" height="18" rx="2" fill="#e0530a" fillOpacity="0.25" stroke="#e0530a" strokeWidth="1" />
+            <rect x="30" y="30" width="18" height="18" rx="2" fill="#2563eb" fillOpacity="0.25" stroke="#2563eb" strokeWidth="1" />
+            <line x1="12" y1="12" x2="30" y2="12" stroke="#e0530a" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="30" y1="12" x2="48" y2="12" stroke="#eeece6" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1="12" y1="30" x2="30" y2="30" stroke="#e0530a" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="30" y1="30" x2="48" y2="30" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="12" y1="48" x2="30" y2="48" stroke="#eeece6" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1="30" y1="48" x2="48" y2="48" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="12" y1="12" x2="12" y2="30" stroke="#e0530a" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="30" y1="12" x2="30" y2="30" stroke="#e0530a" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="48" y1="12" x2="48" y2="30" stroke="#eeece6" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1="12" y1="30" x2="12" y2="48" stroke="#eeece6" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1="30" y1="30" x2="30" y2="48" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="48" y1="30" x2="48" y2="48" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+            {[12, 30, 48].map((y) =>
+              [12, 30, 48].map((x) => (
+                <circle key={`${x}-${y}`} cx={x} cy={y} r="2.5" fill="#1c1917" />
+              ))
+            )}
+          </svg>
+        </div>
+      );
     case "ping-pong":
       return (
         <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">

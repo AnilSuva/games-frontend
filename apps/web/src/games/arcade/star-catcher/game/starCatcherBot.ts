@@ -16,32 +16,12 @@ import type {
   BlackHoleState,
   AsteroidState,
 } from "./types";
+import {
+  getToroidalDelta,
+  getToroidalDistanceSq,
+} from "./starCatcherPhysics";
 
-/**
- * Calculates the shortest displacement considering screen-edge wrapping (toroidal geometry).
- */
-export function getToroidalDelta(target: number, current: number, dimension: number): number {
-  let delta = target - current;
-  if (delta > dimension / 2) {
-    delta -= dimension;
-  } else if (delta < -dimension / 2) {
-    delta += dimension;
-  }
-  return delta;
-}
-
-export function getToroidalDistanceSq(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  width: number,
-  height: number
-): number {
-  const dx = getToroidalDelta(x2, x1, width);
-  const dy = getToroidalDelta(y2, y1, height);
-  return dx * dx + dy * dy;
-}
+export { getToroidalDelta, getToroidalDistanceSq };
 
 export class StarCatcherBot {
   private difficulty: BotDifficulty;
@@ -62,11 +42,14 @@ export class StarCatcherBot {
     ship: ShipState,
     star: StarState | null,
     blackHole: BlackHoleState | null,
-    asteroids: AsteroidState[] = []
+    asteroids: AsteroidState[] = [],
+    opponentShip: ShipState | null = null
   ): JoystickInput {
-    // Decision latency based on difficulty
+    // Decision latency based on difficulty:
+    // Easy bot is very casual/forgiving with 650ms reaction delay,
+    // Medium has human-friendly 250ms delay, and Hard has 85ms skilled reaction.
     const latencyMs =
-      this.difficulty === "easy" ? 280 : this.difficulty === "medium" ? 130 : 35;
+      this.difficulty === "easy" ? 650 : this.difficulty === "medium" ? 250 : 85;
 
     if (currentTime - this.lastDecisionTime < latencyMs && this.currentInput.active) {
       return this.currentInput;
@@ -79,8 +62,16 @@ export class StarCatcherBot {
       return this.currentInput;
     }
 
-    // 1. Vector to Star (with toroidal wrap)
-    const useToroidal = this.difficulty !== "easy" || Math.random() > 0.3;
+    // 1. Vector to Star:
+    // Easy bot NEVER uses toroidal wrapping across borders (acts like a beginner looking at screen).
+    // Medium bot occasionally wraps (50%). Hard bot always uses smart toroidal wrapping.
+    const useToroidal =
+      this.difficulty === "hard"
+        ? true
+        : this.difficulty === "medium"
+        ? Math.random() < 0.50
+        : false;
+
     const dxStar = useToroidal
       ? getToroidalDelta(star.x, ship.x, GAME_WIDTH)
       : star.x - ship.x;
@@ -92,7 +83,8 @@ export class StarCatcherBot {
     let targetX = distStar > 0.001 ? (dxStar / distStar) * 1.0 : 0;
     let targetY = distStar > 0.001 ? (dyStar / distStar) * 1.0 : 0;
 
-    // 2. Obstacle Avoidance: Black Hole
+    // 2. Obstacle Avoidance: Black Hole & Orbital Vortex
+    let isInsideBH = false;
     if (blackHole && blackHole.active && blackHole.scale > 0.2) {
       const dxBH = useToroidal
         ? getToroidalDelta(blackHole.x, ship.x, GAME_WIDTH)
@@ -102,24 +94,45 @@ export class StarCatcherBot {
         : blackHole.y - ship.y;
       const distBH = Math.hypot(dxBH, dyBH);
 
-      const avoidRadius =
-        this.difficulty === "hard"
-          ? BLACK_HOLE_PULL_RADIUS * 1.2
-          : this.difficulty === "medium"
-          ? BLACK_HOLE_PULL_RADIUS * 0.95
-          : BLACK_HOLE_PULL_RADIUS * 0.6;
+      if (distBH < 55) {
+        isInsideBH = true;
+        // In the core vortex, the bot steers along the prograde orbital tangent
+        // to complete an orbital rotation and slingshot out!
+        // Clockwise tangent: tanX = dyBH / distBH, tanY = -dxBH / distBH
+        const tanX = dyBH / distBH;
+        const tanY = -dxBH / distBH;
 
-      if (distBH < avoidRadius && distBH > 0.1) {
-        const repulsionStrength =
+        if (this.difficulty === "hard") {
+          targetX = tanX * 2.2;
+          targetY = tanY * 2.2;
+        } else if (this.difficulty === "medium") {
+          targetX = tanX * 1.6 + (-dxBH / distBH) * 0.4;
+          targetY = tanY * 1.6 + (-dyBH / distBH) * 0.4;
+        } else {
+          // Easy bot wobbles around the orbit
+          targetX = tanX * 1.0 + (Math.random() - 0.5) * 1.0;
+          targetY = tanY * 1.0 + (Math.random() - 0.5) * 1.0;
+        }
+      } else {
+        const avoidRadius =
           this.difficulty === "hard"
-            ? 2.5 * (1 - distBH / avoidRadius)
+            ? BLACK_HOLE_PULL_RADIUS * 1.05
             : this.difficulty === "medium"
-            ? 1.8 * (1 - distBH / avoidRadius)
-            : 0.9 * (1 - distBH / avoidRadius);
+            ? BLACK_HOLE_PULL_RADIUS * 0.75
+            : BLACK_HOLE_PULL_RADIUS * 0.35;
 
-        // Repel away from black hole
-        targetX -= (dxBH / distBH) * repulsionStrength;
-        targetY -= (dyBH / distBH) * repulsionStrength;
+        if (distBH < avoidRadius && distBH > 0.1) {
+          const repulsionStrength =
+            this.difficulty === "hard"
+              ? 2.0 * (1 - distBH / avoidRadius)
+              : this.difficulty === "medium"
+              ? 1.2 * (1 - distBH / avoidRadius)
+              : 0.5 * (1 - distBH / avoidRadius);
+
+          // Repel away from black hole
+          targetX -= (dxBH / distBH) * repulsionStrength;
+          targetY -= (dyBH / distBH) * repulsionStrength;
+        }
       }
     }
 
@@ -133,31 +146,66 @@ export class StarCatcherBot {
           ? getToroidalDelta(asteroid.y, ship.y, GAME_HEIGHT)
           : asteroid.y - ship.y;
         const distAst = Math.hypot(dxAst, dyAst);
-        const alertRadius = asteroid.radius + 40;
+        const alertRadius =
+          this.difficulty === "hard" ? asteroid.radius + 35 : asteroid.radius + 20;
 
         if (distAst < alertRadius && distAst > 0.1) {
-          const rep = (1 - distAst / alertRadius) * (this.difficulty === "hard" ? 1.5 : 1.0);
+          const rep =
+            (1 - distAst / alertRadius) * (this.difficulty === "hard" ? 1.2 : 0.6);
           targetX -= (dxAst / distAst) * rep;
           targetY -= (dyAst / distAst) * rep;
         }
       }
     }
 
-    // 4. Calculate desired angle
+    // 4. Opponent Ship Awareness
+    if (opponentShip && this.difficulty !== "easy") {
+      const dxOpp = useToroidal
+        ? getToroidalDelta(opponentShip.x, ship.x, GAME_WIDTH)
+        : opponentShip.x - ship.x;
+      const dyOpp = useToroidal
+        ? getToroidalDelta(opponentShip.y, ship.y, GAME_HEIGHT)
+        : opponentShip.y - ship.y;
+      const distOpp = Math.hypot(dxOpp, dyOpp);
+      const alertDist = this.difficulty === "hard" ? 42 : 32;
+
+      if (distOpp < alertDist && distOpp > 0.1) {
+        const oppRep =
+          (1 - distOpp / alertDist) * (this.difficulty === "hard" ? 0.6 : 0.35);
+        targetX -= (dxOpp / distOpp) * oppRep;
+        targetY -= (dyOpp / distOpp) * oppRep;
+      }
+    }
+
+    // 5. Calculate desired angle
     let desiredAngle = Math.atan2(targetY, targetX);
 
-    // 5. Add difficulty-based steering noise
+    // 6. Add difficulty-based steering noise and human imperfection
     if (this.difficulty === "easy") {
-      desiredAngle += (Math.random() - 0.5) * 0.5;
+      desiredAngle += (Math.random() - 0.5) * 1.1; // ~ +/- 31 degrees wobble
+      // Occasional overshoot or hesitation near star
+      if (distStar < 55 && Math.random() < 0.30) {
+        desiredAngle += (Math.random() - 0.5) * 0.8;
+      }
     } else if (this.difficulty === "medium") {
-      desiredAngle += (Math.random() - 0.5) * 0.15;
+      desiredAngle += (Math.random() - 0.5) * 0.38; // ~ +/- 11 degrees
+    } else {
+      desiredAngle += (Math.random() - 0.5) * 0.08; // Small human imperfection
     }
 
     this.targetHeading = desiredAngle;
 
-    // Determine intensity
-    const intensity =
-      this.difficulty === "hard" ? 1.0 : this.difficulty === "medium" ? 0.9 : 0.75;
+    // 7. Determine throttle intensity:
+    // Easy bot is capped at 0.48 so human players can easily outpace it;
+    // Medium is comfortable at 0.72; Hard is competitive at 0.92.
+    let intensity: number;
+    if (isInsideBH) {
+      intensity =
+        this.difficulty === "hard" ? 1.0 : this.difficulty === "medium" ? 0.85 : 0.58;
+    } else {
+      intensity =
+        this.difficulty === "hard" ? 0.92 : this.difficulty === "medium" ? 0.72 : 0.48;
+    }
 
     this.currentInput = {
       active: true,

@@ -53,14 +53,22 @@ export const gameMoveSchema = z
     column: z.number().int().min(0).max(6).optional(),
     from: z.number().int().min(0).max(63).optional(),
     to: z.number().int().min(0).max(63).optional(),
+    edge: z
+      .object({
+        type: z.enum(["h", "v"]),
+        row: z.number().int().min(0),
+        col: z.number().int().min(0),
+      })
+      .optional(),
   })
   .refine(
     (data) =>
       data.position !== undefined ||
       data.column !== undefined ||
-      (data.from !== undefined && data.to !== undefined),
+      (data.from !== undefined && data.to !== undefined) ||
+      data.edge !== undefined,
     {
-      message: "Either position, column, or (from and to) must be provided",
+      message: "Either position, column, (from and to), or edge must be provided",
     }
   );
 

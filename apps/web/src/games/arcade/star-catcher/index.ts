@@ -8,3 +8,4 @@ export { StarCatcherScene } from "./game/StarCatcherScene";
 export * from "./config/constants";
 export * from "./game/types";
 export * from "./game/starCatcherBot";
+export * from "./game/starCatcherPhysics";

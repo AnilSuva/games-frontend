@@ -341,6 +341,8 @@ export async function handleClientMessage(
           ? { type: "MOVE", from: message.payload.from, to: message.payload.to }
           : message.payload.column !== undefined
           ? { type: "MOVE", column: message.payload.column }
+          : message.payload.edge !== undefined
+          ? { type: "CLAIM_EDGE", edge: message.payload.edge }
           : { type: "MOVE", position: message.payload.position };
 
       const validation = adapter.validateAction(

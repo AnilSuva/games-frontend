@@ -114,6 +114,11 @@ export interface GameMovePayload {
   column?: number;
   from?: number;
   to?: number;
+  edge?: {
+    type: "h" | "v";
+    row: number;
+    col: number;
+  };
 }
 
 export interface GameRematchPayload {

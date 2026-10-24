@@ -3,7 +3,7 @@
  */
 
 export type PlayerRole = "orange" | "blue";
-export type GameMode = "1v1" | "bot";
+export type GameMode = "1v1" | "bot" | "online";
 export type BotDifficulty = "easy" | "medium" | "hard";
 
 export interface StarCatcherScore {
@@ -53,12 +53,17 @@ export interface StarCatcherCallbacks {
   onScoreUpdate: (scores: StarCatcherScore) => void;
   onStarCollected: (collector: PlayerRole, newScores: StarCatcherScore) => void;
   onGameOver: (winner: PlayerRole, finalScores: StarCatcherScore) => void;
+  onLocalShipSync?: (state: ShipState) => void;
+  onStarSpawn?: (pos: { x: number; y: number }) => void;
+  onBlackHoleSpawn?: (pos: { x: number; y: number }) => void;
+  onBlackHoleDespawn?: () => void;
 }
 
 export interface StarCatcherInitData {
   mode: GameMode;
   difficulty: BotDifficulty;
   callbacks: StarCatcherCallbacks;
+  myRole?: PlayerRole;
 }
 
 export interface JoystickInput {

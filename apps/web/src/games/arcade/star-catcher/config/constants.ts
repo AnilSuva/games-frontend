@@ -23,17 +23,21 @@ export const WRAP_MARGIN = 20;
 // Star mechanics
 export const STAR_RADIUS = 18;
 export const STAR_COLLECT_RADIUS = 28;
-export const STAR_RESPAWN_DELAY_MS = 1200;
+export const STAR_RESPAWN_DELAY_MS = 2400; // Authentic pause between star collection and respawn
 export const STAR_SPAWN_PADDING_X = 45;
 export const STAR_SPAWN_PADDING_Y = 70;
 
 // Black Hole (Buco Nero) Hazard
 export const BLACK_HOLE_RADIUS = 28;
 export const BLACK_HOLE_PULL_RADIUS = 170;
-export const BLACK_HOLE_MAX_FORCE = 240; // Max gravitational acceleration at center
+export const BLACK_HOLE_CORE_RADIUS = 38;
+export const BLACK_HOLE_MAX_FORCE = 300; // Radial acceleration
+export const BLACK_HOLE_ORBIT_ESCAPE_ANGLE = Math.PI * 1.9; // ~342 deg (~full rotation orbit around singularity)
+export const BLACK_HOLE_SLINGSHOT_SPEED = 340; // Escape velocity impulse on completing orbit (px/s)
+export const BLACK_HOLE_ESCAPE_GRACE_SEC = 0.85; // Grace duration after slingshot to clear pull radius
 export const BLACK_HOLE_FIRST_SPAWN_DELAY_MS = 8000;
-export const BLACK_HOLE_INTERVAL_MS = 16000;
-export const BLACK_HOLE_DURATION_MS = 7500; // (tempoRimaneBucoNero)
+export const BLACK_HOLE_INTERVAL_MS = 15000; // (sogliaBucoNero in base.apk = 15s)
+export const BLACK_HOLE_DURATION_MS = 10000; // (tempoRimaneBucoNero in base.apk = 10s)
 
 // Asteroid Hazards
 export const NUM_ASTEROIDS = 2;

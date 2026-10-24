@@ -165,6 +165,52 @@ export interface OnlinePingPongState {
   matchStartTime?: number;
 }
 
+export type StarCatcherOnlinePlayer = "orange" | "blue";
+
+export interface StarCatcherOnlineScore {
+  orange: number;
+  blue: number;
+}
+
+export interface OnlineStarCatcherState {
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  startingPlayer: StarCatcherOnlinePlayer;
+  scores: StarCatcherOnlineScore;
+  winner: StarCatcherOnlinePlayer | null;
+  playerRoles: Record<string, StarCatcherOnlinePlayer>;
+  rematchRequests: string[];
+  resultReason?: "win" | "disconnect_forfeit";
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  matchStartTime?: number;
+}
+
+export type DotsBoxesOnlinePlayer = "orange" | "blue";
+
+export interface OnlineDotsBoxesState {
+  config: { rows: number; cols: number };
+  horizontalEdges: (DotsBoxesOnlinePlayer | null)[][];
+  verticalEdges: (DotsBoxesOnlinePlayer | null)[][];
+  boxes: (DotsBoxesOnlinePlayer | null)[][];
+  scores: Record<DotsBoxesOnlinePlayer, number>;
+  currentPlayer: DotsBoxesOnlinePlayer;
+  startingPlayer: DotsBoxesOnlinePlayer;
+  status: "waiting" | "in_progress" | "won" | "draw";
+  winner: DotsBoxesOnlinePlayer | "draw" | null;
+  lastMove: {
+    edge: { type: "h" | "v"; row: number; col: number };
+    player: DotsBoxesOnlinePlayer;
+    completedBoxes: { row: number; col: number }[];
+  } | null;
+  moveCount: number;
+  consecutiveBoxesThisTurn: number;
+  playerColors: Record<string, DotsBoxesOnlinePlayer>;
+  rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+}
+
 export interface ServerEnvelope<T = unknown> {
   version: 1;
   type: string;

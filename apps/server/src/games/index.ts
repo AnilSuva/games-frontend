@@ -4,6 +4,8 @@ import { ConnectFourAdapter } from "./connect-four/ConnectFourAdapter.js";
 import { BrickBlastAdapter } from "./brick-blast/BrickBlastAdapter.js";
 import { CheckersAdapter } from "./checkers/CheckersAdapter.js";
 import { PingPongAdapter } from "./ping-pong/PingPongAdapter.js";
+import { DotsAndBoxesAdapter } from "./dots-and-boxes/DotsAndBoxesAdapter.js";
+import { StarCatcherAdapter } from "./star-catcher/StarCatcherAdapter.js";
 
 export * from "./GameAdapter.js";
 export * from "./tic-tac-toe/index.js";
@@ -32,6 +34,18 @@ export type {
   PingPongAction,
   PlatformPlayer as PingPongPlayer,
 } from "./ping-pong/types.js";
+export { DotsAndBoxesAdapter } from "./dots-and-boxes/DotsAndBoxesAdapter.js";
+export type {
+  DotsBoxesGameState,
+  DotsBoxesAction,
+  PlatformPlayer as DotsBoxesPlayer,
+} from "./dots-and-boxes/types.js";
+export { StarCatcherAdapter } from "./star-catcher/StarCatcherAdapter.js";
+export type {
+  StarCatcherGameState,
+  StarCatcherAction,
+  PlatformPlayer as StarCatcherPlayer,
+} from "./star-catcher/types.js";
 
 export function createDefaultGameRegistry(): GameAdapterRegistry {
   const registry = new GameAdapterRegistry();
@@ -40,6 +54,8 @@ export function createDefaultGameRegistry(): GameAdapterRegistry {
   registry.register(new BrickBlastAdapter());
   registry.register(new CheckersAdapter());
   registry.register(new PingPongAdapter());
+  registry.register(new DotsAndBoxesAdapter());
+  registry.register(new StarCatcherAdapter());
   return registry;
 }
 
