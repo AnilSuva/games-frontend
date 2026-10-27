@@ -185,6 +185,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/arcade/star-catcher/components/StarCatcherGame"),
   },
   {
+    id: "typing-race",
+    title: "Typing Race",
+    shortDescription: "High-speed 2-player multiplayer typing sprint.",
+    description:
+      "Two players race head-to-head on a dual-lane asphalt track. Speed and keystroke precision drive your car to the checkered finish line in real-time online competition.",
+    category: "arcade",
+    engine: "react-dom",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "responsive",
+    iconName: "zap",
+    badgeText: "Online",
+    tags: ["Arcade", "Multiplayer", "Typing", "Speed", "Racing", "2-Player"],
+    loader: () =>
+      import("@/games/arcade/typing-race/components/TypingRaceGame"),
+  },
+  {
     id: "archery",
     title: "Archery",
     shortDescription: "Precision target shooting with dynamic wind.",

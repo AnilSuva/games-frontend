@@ -6,6 +6,7 @@ import { CheckersAdapter } from "./checkers/CheckersAdapter.js";
 import { PingPongAdapter } from "./ping-pong/PingPongAdapter.js";
 import { DotsAndBoxesAdapter } from "./dots-and-boxes/DotsAndBoxesAdapter.js";
 import { StarCatcherAdapter } from "./star-catcher/StarCatcherAdapter.js";
+import { TypingRaceAdapter } from "./typing-race/TypingRaceAdapter.js";
 
 export * from "./GameAdapter.js";
 export * from "./tic-tac-toe/index.js";
@@ -46,6 +47,13 @@ export type {
   StarCatcherAction,
   PlatformPlayer as StarCatcherPlayer,
 } from "./star-catcher/types.js";
+export { TypingRaceAdapter } from "./typing-race/TypingRaceAdapter.js";
+export type {
+  TypingRaceGameState,
+  TypingRaceAction,
+  PlatformPlayer as TypingRacePlayer,
+  PlayerRaceStats,
+} from "./typing-race/types.js";
 
 export function createDefaultGameRegistry(): GameAdapterRegistry {
   const registry = new GameAdapterRegistry();
@@ -56,6 +64,7 @@ export function createDefaultGameRegistry(): GameAdapterRegistry {
   registry.register(new PingPongAdapter());
   registry.register(new DotsAndBoxesAdapter());
   registry.register(new StarCatcherAdapter());
+  registry.register(new TypingRaceAdapter());
   return registry;
 }
 

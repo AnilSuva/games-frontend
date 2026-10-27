@@ -178,6 +178,8 @@ export interface OnlineStarCatcherState {
   scores: StarCatcherOnlineScore;
   winner: StarCatcherOnlinePlayer | null;
   playerRoles: Record<string, StarCatcherOnlinePlayer>;
+  readyPlayers?: string[];
+  initialStar?: { x: number; y: number } | null;
   rematchRequests: string[];
   resultReason?: "win" | "disconnect_forfeit";
   disconnectGraceExpiresAt?: number | null;
@@ -186,6 +188,40 @@ export interface OnlineStarCatcherState {
 }
 
 export type DotsBoxesOnlinePlayer = "orange" | "blue";
+
+export type TypingRaceOnlinePlayer = "orange" | "blue";
+
+export interface TypingRacePlayerStats {
+  correctChars: number;
+  totalTypedChars: number;
+  totalKeystrokes: number;
+  errorCount: number;
+  wpm: number;
+  accuracy: number;
+  progress: number;
+  isFinished: boolean;
+  finishTimeMs?: number;
+}
+
+export type PlayerRaceStats = TypingRacePlayerStats;
+
+export interface OnlineTypingRaceState {
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  passageId: string;
+  passageText: string;
+  wordCount: number;
+  countdownStartAt?: number | null;
+  raceStartAt?: number | null;
+  players: Record<TypingRaceOnlinePlayer, TypingRacePlayerStats>;
+  playerRoles: Record<string, TypingRaceOnlinePlayer>;
+  readyPlayers: string[];
+  winner: TypingRaceOnlinePlayer | null;
+  resultReason?: "win" | "disconnect_forfeit";
+  rematchRequests: string[];
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  matchStartTime: number;
+}
 
 export interface OnlineDotsBoxesState {
   config: { rows: number; cols: number };

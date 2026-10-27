@@ -511,6 +511,7 @@ export async function handleClientMessage(
         connection.playerId
       );
 
+      const stateChanged = actionResult.nextState !== room.gameState;
       room.gameState = actionResult.nextState;
       const nextState = actionResult.nextState as { status?: string };
       if (nextState.status === "won" || nextState.status === "draw") {
@@ -547,6 +548,22 @@ export async function handleClientMessage(
           },
           connectionTracker,
           connection.playerId
+        );
+      }
+
+      if (stateChanged) {
+        broadcastToRoom<GameStatePayload>(
+          room,
+          {
+            version: PROTOCOL_VERSION,
+            type: "game.state",
+            payload: {
+              roomId: room.id,
+              version: room.version,
+              gameState: room.gameState,
+            },
+          },
+          connectionTracker
         );
       }
       break;

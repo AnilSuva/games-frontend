@@ -38,6 +38,8 @@ export class StarCatcherAdapter
       scores: { orange: 0, blue: 0 },
       winner: null,
       playerRoles,
+      readyPlayers: [],
+      initialStar: null,
       rematchRequests: [],
       matchStartTime: Date.now(),
     };
@@ -225,6 +227,35 @@ export class StarCatcherAdapter
         };
       }
 
+      if (action.event === "player_ready") {
+        const readyPlayers = state.readyPlayers ?? [];
+        const nextReady = readyPlayers.includes(playerId)
+          ? readyPlayers
+          : [...readyPlayers, playerId];
+
+        const role = state.playerRoles[playerId];
+        const nextState: StarCatcherGameState = {
+          ...state,
+          readyPlayers: nextReady,
+        };
+
+        return {
+          nextState,
+          events: [
+            {
+              type: "game_event",
+              event: "player_ready",
+              data: {
+                playerId,
+                role,
+                readyPlayers: nextReady,
+                allReady: nextReady.length >= 2,
+              },
+            },
+          ],
+        };
+      }
+
       return {
         nextState: state,
         events: [
@@ -258,6 +289,8 @@ export class StarCatcherAdapter
           scores: { orange: 0, blue: 0 },
           winner: null,
           playerRoles: state.playerRoles,
+          readyPlayers: [],
+          initialStar: null,
           rematchRequests: [],
           matchStartTime: Date.now(),
         };

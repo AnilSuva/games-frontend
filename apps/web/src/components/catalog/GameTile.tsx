@@ -269,6 +269,58 @@ function GameTileIllustration({ id }: { id: string }) {
           </svg>
         </div>
       );
+    case "typing-race":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center rounded-xl bg-[#0b1120] border border-[#1e293b] p-1.5 overflow-hidden">
+          <svg className="w-full h-full max-w-[96px] max-h-[72px]" viewBox="0 0 96 72" fill="none">
+            {/* Asphalt lanes */}
+            <rect x="0" y="8" width="96" height="26" fill="#0f172a" />
+            <rect x="0" y="38" width="96" height="26" fill="#0f172a" />
+            <line x1="0" y1="36" x2="96" y2="36" stroke="#334155" strokeWidth="2" strokeDasharray="6 4" />
+            {/* Checkered Finish Line on Right */}
+            <g transform="translate(86, 8)">
+              <rect x="0" y="0" width="4" height="6" fill="#ffffff" />
+              <rect x="4" y="0" width="4" height="6" fill="#000000" />
+              <rect x="0" y="6" width="4" height="6" fill="#000000" />
+              <rect x="4" y="6" width="4" height="6" fill="#ffffff" />
+              <rect x="0" y="12" width="4" height="6" fill="#ffffff" />
+              <rect x="4" y="12" width="4" height="6" fill="#000000" />
+              <rect x="0" y="18" width="4" height="6" fill="#000000" />
+              <rect x="4" y="18" width="4" height="6" fill="#ffffff" />
+              <rect x="0" y="24" width="4" height="6" fill="#ffffff" />
+              <rect x="4" y="24" width="4" height="6" fill="#000000" />
+              <rect x="0" y="30" width="4" height="6" fill="#000000" />
+              <rect x="4" y="30" width="4" height="6" fill="#ffffff" />
+              <rect x="0" y="36" width="4" height="6" fill="#ffffff" />
+              <rect x="4" y="36" width="4" height="6" fill="#000000" />
+              <rect x="0" y="42" width="4" height="6" fill="#000000" />
+              <rect x="4" y="42" width="4" height="6" fill="#ffffff" />
+              <rect x="0" y="48" width="4" height="6" fill="#ffffff" />
+              <rect x="4" y="48" width="4" height="6" fill="#000000" />
+            </g>
+            {/* Orange Car (Top Lane) */}
+            <g transform="translate(56, 17)">
+              <polygon points="-8,4 -14,4 -10,0" fill="#fbbf24" />
+              <rect x="-6" y="-3" width="22" height="10" rx="3" fill="#ea580c" stroke="#f97316" strokeWidth="1" />
+              <rect x="4" y="-1" width="7" height="6" rx="1.5" fill="#1e293b" />
+              <rect x="-4" y="-5" width="4" height="2" fill="#0f172a" />
+              <rect x="10" y="-5" width="4" height="2" fill="#0f172a" />
+              <rect x="-4" y="7" width="4" height="2" fill="#0f172a" />
+              <rect x="10" y="7" width="4" height="2" fill="#0f172a" />
+            </g>
+            {/* Blue Car (Bottom Lane) */}
+            <g transform="translate(36, 47)">
+              <polygon points="-8,4 -14,4 -10,0" fill="#38bdf8" />
+              <rect x="-6" y="-3" width="22" height="10" rx="3" fill="#2563eb" stroke="#3b82f6" strokeWidth="1" />
+              <rect x="4" y="-1" width="7" height="6" rx="1.5" fill="#1e293b" />
+              <rect x="-4" y="-5" width="4" height="2" fill="#0f172a" />
+              <rect x="10" y="-5" width="4" height="2" fill="#0f172a" />
+              <rect x="-4" y="7" width="4" height="2" fill="#0f172a" />
+              <rect x="10" y="7" width="4" height="2" fill="#0f172a" />
+            </g>
+          </svg>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-full max-w-[80px] max-h-[80px] flex items-center justify-center text-[#9c978e]">

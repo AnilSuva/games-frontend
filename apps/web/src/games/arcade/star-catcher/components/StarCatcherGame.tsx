@@ -96,6 +96,14 @@ export default function StarCatcherGame({
   const [isPopupDismissed, setIsPopupDismissed] = useState<boolean>(false);
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
 
+  // Online Ready Handshake & Synchronized Countdown
+  const [isPhaserReady, setIsPhaserReady] = useState<boolean>(false);
+  const [isLocalReady, setIsLocalReady] = useState<boolean>(false);
+  const [isRemoteReadyEvent, setIsRemoteReadyEvent] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isMatchStarted, setIsMatchStarted] = useState<boolean>(false);
+  const countdownTimerRef = useRef<NodeJS.Timeout[]>([]);
+
   // Live HUD state
   const [scores, setScores] = useState<StarCatcherScore>({ orange: 0, blue: 0 });
   const [gameOverResult, setGameOverResult] = useState<{
@@ -131,6 +139,91 @@ export default function StarCatcherGame({
     onLifecycleChange?.("pre-game");
   }, [onLifecycleChange]);
 
+  const clearCountdownTimers = useCallback(() => {
+    countdownTimerRef.current.forEach((t) => clearTimeout(t));
+    countdownTimerRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearCountdownTimers();
+    };
+  }, [clearCountdownTimers]);
+
+  // Synchronized 3-2-1-Launch sequence
+  const startCountdown = useCallback(
+    (starPos?: { x: number; y: number }) => {
+      clearCountdownTimers();
+      setCountdown(3);
+      soundManager.play("dropBall");
+
+      const t1 = setTimeout(() => {
+        setCountdown(2);
+        soundManager.play("dropBall");
+      }, 1000);
+
+      const t2 = setTimeout(() => {
+        setCountdown(1);
+        soundManager.play("dropBall");
+      }, 2000);
+
+      const t3 = setTimeout(() => {
+        setCountdown(0);
+        soundManager.play("buttonClick");
+        setIsMatchStarted(true);
+        sceneRef.current?.startOnlineMatch(starPos);
+      }, 3000);
+
+      const t4 = setTimeout(() => {
+        setCountdown(null);
+      }, 3700);
+
+      countdownTimerRef.current = [t1, t2, t3, t4];
+    },
+    [clearCountdownTimers]
+  );
+
+  const startCountdownRef = useRef(startCountdown);
+  useEffect(() => {
+    startCountdownRef.current = startCountdown;
+  }, [startCountdown]);
+
+  // Track opponent's ready state from server authoritative gameState or live event
+  const opponentPlayerId = online.room?.players.find(
+    (p) => p.playerId !== online.myPlayerId
+  )?.playerId;
+
+  const isRemoteReady =
+    isRemoteReadyEvent ||
+    Boolean(
+      opponentPlayerId &&
+        online.gameState?.readyPlayers?.includes(opponentPlayerId)
+    );
+
+  // Host triggers synchronized countdown when BOTH sides are fully rendered & ready
+  useEffect(() => {
+    if (selectedMode !== "online") return;
+    if (!isLocalReady || !isRemoteReady) return;
+    if (countdown !== null || isMatchStarted) return;
+
+    if (online.isHost) {
+      const starPos = {
+        x: Math.floor(Math.random() * (GAME_WIDTH - 120) + 60),
+        y: Math.floor(Math.random() * (GAME_HEIGHT - 240) + 120),
+      };
+      online.sendGameEvent("countdown_start", { starPos });
+      startCountdownRef.current(starPos);
+    }
+  }, [
+    selectedMode,
+    isLocalReady,
+    isRemoteReady,
+    countdown,
+    isMatchStarted,
+    online.isHost,
+    online,
+  ]);
+
   // Mode Selection Handlers
   const handleSelectMode = useCallback(
     (modeId: string) => {
@@ -143,6 +236,11 @@ export default function StarCatcherGame({
         setGameOverResult(null);
         setScores({ orange: 0, blue: 0 });
         setHasInteracted(false);
+        setIsPhaserReady(false);
+        setIsLocalReady(false);
+        setIsRemoteReadyEvent(false);
+        setCountdown(null);
+        setIsMatchStarted(false);
         online.connect();
       } else {
         setSelectedMode(modeId as GameMode);
@@ -152,6 +250,11 @@ export default function StarCatcherGame({
         setGameOverResult(null);
         setScores({ orange: 0, blue: 0 });
         setHasInteracted(false);
+        setIsPhaserReady(false);
+        setIsLocalReady(false);
+        setIsRemoteReadyEvent(false);
+        setCountdown(null);
+        setIsMatchStarted(true);
         callbacksRef.current.onLifecycleChange?.("playing");
       }
     },
@@ -168,6 +271,11 @@ export default function StarCatcherGame({
       setGameOverResult(null);
       setScores({ orange: 0, blue: 0 });
       setHasInteracted(false);
+      setIsPhaserReady(false);
+      setIsLocalReady(false);
+      setIsRemoteReadyEvent(false);
+      setCountdown(null);
+      setIsMatchStarted(true);
       callbacksRef.current.onLifecycleChange?.("playing");
     },
     []
@@ -176,6 +284,7 @@ export default function StarCatcherGame({
   const handleBackToModeSelect = useCallback(() => {
     soundManager.play("buttonClick");
     onlineResultSoundGuardRef.current.reset();
+    clearCountdownTimers();
     if (selectedMode === "online") {
       online.leaveRoom();
     }
@@ -189,8 +298,13 @@ export default function StarCatcherGame({
     setGameOverResult(null);
     setScores({ orange: 0, blue: 0 });
     setHasInteracted(false);
+    setIsPhaserReady(false);
+    setIsLocalReady(false);
+    setIsRemoteReadyEvent(false);
+    setCountdown(null);
+    setIsMatchStarted(false);
     callbacksRef.current.onLifecycleChange?.("pre-game");
-  }, [online, selectedMode]);
+  }, [clearCountdownTimers, online, selectedMode]);
 
   // Clean unmount
   useEffect(() => {
@@ -235,15 +349,22 @@ export default function StarCatcherGame({
       setGameOverResult(null);
       setScores({ orange: 0, blue: 0 });
       onlineResultSoundGuardRef.current.reset();
+      clearCountdownTimers();
+      setIsMatchStarted(false);
+      setCountdown(null);
+      setIsLocalReady(true);
+      setIsRemoteReadyEvent(false);
+
       sceneRef.current?.restartGame(
         "online",
         undefined,
         online.myRole ?? "orange"
       );
+      online.sendReady();
       callbacksRef.current.onLifecycleChange?.("playing");
       callbacksRef.current.onScoreUpdate?.(0);
     }
-  }, [selectedMode, online.gameState?.status, online.myRole]);
+  }, [clearCountdownTimers, selectedMode, online.gameState?.status, online]);
 
   // Online Result Sounds & Game Over Notification
   useEffect(() => {
@@ -422,6 +543,16 @@ export default function StarCatcherGame({
                   onlineRef.current.sendGameEvent("black_hole_despawn");
                 }
               },
+              onSceneReady: () => {
+                if (!isMounted) return;
+                setIsPhaserReady(true);
+                if (selectedMode === "online") {
+                  setIsLocalReady(true);
+                  onlineRef.current.sendReady();
+                } else {
+                  setIsMatchStarted(true);
+                }
+              },
             },
           }
         ) as import("../game/StarCatcherScene").StarCatcherScene;
@@ -436,7 +567,13 @@ export default function StarCatcherGame({
           });
 
           onlineRef.current.setOnRemoteEvent((eventData) => {
-            if (eventData.event === "star_spawn" && eventData.data) {
+            if (eventData.event === "player_ready") {
+              setIsRemoteReadyEvent(true);
+            } else if (eventData.event === "countdown_start") {
+              setIsRemoteReadyEvent(true);
+              const d = eventData.data as { starPos?: { x: number; y: number } } | undefined;
+              startCountdownRef.current(d?.starPos);
+            } else if (eventData.event === "star_spawn" && eventData.data) {
               scene.handleRemoteStarSpawn(
                 eventData.data as { x: number; y: number }
               );
@@ -501,6 +638,11 @@ export default function StarCatcherGame({
 
   // Dynamic match alert badge text
   const matchAlertText = (() => {
+    if (selectedMode === "online" && !isMatchStarted) {
+      if (countdown !== null) return `LAUNCH IN ${countdown}s`;
+      if (!isRemoteReady) return "SYNCING RIVAL...";
+      return "PRIMING SHIPS...";
+    }
     if (displayScores.orange === 4 && displayScores.blue === 4) return "FINAL MATCH POINT! ⚡";
     if (displayScores.orange === 4) return "ORANGE MATCH POINT! 🎯";
     if (displayScores.blue === 4) return "BLUE MATCH POINT! 🎯";
@@ -620,6 +762,7 @@ export default function StarCatcherGame({
 
   const controlsHint = (() => {
     if (selectedMode === "online") {
+      if (!isMatchStarted) return "Engines Primed";
       return online.myRole === "blue"
         ? "[WASD / Drag] Blue Ship"
         : "[WASD / Drag] Orange Ship";
@@ -645,6 +788,85 @@ export default function StarCatcherGame({
         }}
         onPointerDown={() => setHasInteracted(true)}
       >
+        {/* Loading Overlay while Phaser bundle and textures are compiling on device */}
+        {selectedMode === "online" && !isPhaserReady && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#07090e] p-6 text-center select-none">
+            <div className="relative w-16 h-16 mb-4 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-2 border-orange-500/30 border-t-orange-400 animate-spin" />
+              <div className="absolute inset-2 rounded-full border-2 border-blue-500/30 border-b-blue-400 animate-spin [animation-direction:reverse] [animation-duration:1.5s]" />
+              <div className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.9)] animate-pulse" />
+            </div>
+            <span className="text-xs font-bold tracking-widest text-slate-200 uppercase font-mono">
+              Initializing Arena...
+            </span>
+            <span className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
+              Compiling starfighters &amp; cosmic systems
+            </span>
+          </div>
+        )}
+
+        {/* Sync Barrier: Waiting for opponent to finish rendering */}
+        {selectedMode === "online" && isPhaserReady && (!isLocalReady || !isRemoteReady) && (
+          <div className="absolute inset-0 z-25 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs p-6 text-center select-none">
+            <div className="flex flex-col items-center p-5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl max-w-xs text-center">
+              <div className="relative w-10 h-10 mb-3 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin" />
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">
+                Syncing Starfighters
+              </span>
+              <span className="text-[11px] text-slate-400 mt-1">
+                Waiting for opponent to finish rendering...
+              </span>
+              <div className="flex items-center justify-center gap-3 mt-4 text-[11px] font-mono">
+                <span
+                  className={`flex items-center gap-1.5 font-semibold ${
+                    isLocalReady ? "text-emerald-400" : "text-slate-400"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isLocalReady ? "bg-emerald-400 animate-pulse" : "bg-slate-600"
+                    }`}
+                  />
+                  You: {isLocalReady ? "Ready ✓" : "Loading"}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span
+                  className={`flex items-center gap-1.5 font-semibold ${
+                    isRemoteReady ? "text-emerald-400" : "text-amber-400"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isRemoteReady ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-ping"
+                    }`}
+                  />
+                  Rival: {isRemoteReady ? "Ready ✓" : "Rendering"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Synchronized Countdown Overlay */}
+        {countdown !== null && (
+          <div className="absolute inset-0 z-28 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] select-none pointer-events-none">
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold tracking-widest uppercase text-slate-300 font-mono mb-1 drop-shadow-md">
+                Match Starts In
+              </span>
+              <div className="text-6xl sm:text-7xl font-black font-mono tracking-wider drop-shadow-[0_0_25px_rgba(251,191,36,0.9)] text-amber-400 animate-pulse">
+                {countdown === 0 ? "LAUNCH!" : countdown}
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono mt-2">
+                {countdown === 0 ? "Engines Engaged!" : "All Systems Nominal"}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Disconnect Grace Banner */}
         {selectedMode === "online" && online.isMatchPaused && (
           <div className="absolute inset-x-4 top-16 z-30 flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900/95 border border-amber-500/50 shadow-2xl backdrop-blur-md animate-pulse">

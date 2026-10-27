@@ -84,6 +84,35 @@ test("Star Catcher Adapter: Pure unit tests for game logic, authority, scoring, 
     assert.equal(firstEvent?.playerRole, "blue");
   });
 
+  await t.test("Action application: player_ready event tracks ready status and notifies allReady", () => {
+    const state = adapter.createInitialState({
+      hostPlayerId: "host-1",
+      guestPlayerId: "guest-2",
+    });
+
+    // Host reports ready
+    const res1 = adapter.applyAction(
+      state,
+      { type: "EVENT", event: "player_ready" },
+      "host-1"
+    );
+    assert.deepEqual(res1.nextState.readyPlayers, ["host-1"]);
+    const ev1 = res1.events?.[0] as { type: string; event: string; data: { allReady: boolean } };
+    assert.equal(ev1.type, "game_event");
+    assert.equal(ev1.event, "player_ready");
+    assert.equal(ev1.data.allReady, false);
+
+    // Guest reports ready
+    const res2 = adapter.applyAction(
+      res1.nextState,
+      { type: "EVENT", event: "player_ready" },
+      "guest-2"
+    );
+    assert.deepEqual(res2.nextState.readyPlayers, ["host-1", "guest-2"]);
+    const ev2 = res2.events?.[0] as { type: string; event: string; data: { allReady: boolean } };
+    assert.equal(ev2.data.allReady, true);
+  });
+
   await t.test("Score update and Game Over to 5 stars", () => {
     const state = adapter.createInitialState({
       hostPlayerId: "host-1",

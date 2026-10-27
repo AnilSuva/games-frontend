@@ -147,6 +147,10 @@ export function useOnlineStarCatcher() {
     myRoleRef.current = myRole;
   }, [multiplayer.myPlayerId, myRole]);
 
+  const sendReady = useCallback(() => {
+    sendGameEvent("player_ready");
+  }, [sendGameEvent]);
+
   const isHost = myRole === "orange";
   const isGameOver = gameState?.status === "won" || gameState?.status === "abandoned";
   const winner = gameState?.winner ?? null;
@@ -177,6 +181,7 @@ export function useOnlineStarCatcher() {
     disconnectGraceSecondsRemaining,
     hasRequestedRematch,
     opponentRequestedRematch,
+    sendReady,
     sendInput,
     sendGameEvent,
     requestRematch,

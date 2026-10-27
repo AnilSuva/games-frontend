@@ -89,6 +89,7 @@ export class StarCatcherScene extends Phaser.Scene {
 
   // Match state
   public scores: StarCatcherScore = { orange: 0, blue: 0 };
+  public isMatchStarted = true;
   private isGameOver = false;
   private isPaused = false;
 
@@ -150,6 +151,7 @@ export class StarCatcherScene extends Phaser.Scene {
     this.myRole = data.myRole ?? "orange";
     this.callbacks = data.callbacks;
     this.scores = { orange: 0, blue: 0 };
+    this.isMatchStarted = this.mode !== "online";
     this.isGameOver = false;
     this.isPaused = false;
     this.lastNetworkSyncTime = 0;
@@ -201,17 +203,20 @@ export class StarCatcherScene extends Phaser.Scene {
     this.shockwaveSprite.setAlpha(0);
     this.shockwaveSprite.setDepth(24);
 
-    // Setup hazard timers
-    this.setupBlackHoleLifecycle();
+    // Setup hazard timers & initial star only for offline/local modes
+    if (this.mode !== "online") {
+      this.setupBlackHoleLifecycle();
+      this.spawnStar();
+    }
 
     // Input listeners
     this.setupInputs();
 
-    // Spawn first star
-    this.spawnStar();
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+
+    // Notify React host that scene textures and canvas are fully rendered
+    this.callbacks.onSceneReady?.();
   }
 
   private createCosmicBackground(): void {
@@ -817,6 +822,18 @@ export class StarCatcherScene extends Phaser.Scene {
     this.despawnBlackHole();
   }
 
+  public startOnlineMatch(starPos?: { x: number; y: number }): void {
+    this.isMatchStarted = true;
+    if (starPos) {
+      this.spawnStar(starPos.x, starPos.y);
+    } else if (this.myRole === "orange") {
+      this.spawnStar();
+    }
+    if (this.mode !== "online" || this.myRole === "orange") {
+      this.setupBlackHoleLifecycle();
+    }
+  }
+
   private createFloatingScoreText(x: number, y: number, collector: PlayerRole): void {
     const isOrange = collector === "orange";
     const colorHex = isOrange ? "#fb923c" : "#60a5fa";
@@ -871,6 +888,17 @@ export class StarCatcherScene extends Phaser.Scene {
 
   public override update(time: number, delta: number): void {
     if (this.isGameOver || this.isPaused) return;
+
+    if (this.mode === "online" && !this.isMatchStarted) {
+      if (this.remoteShipState) {
+        const isLocalOrange = this.myRole === "orange";
+        const remoteShip = isLocalOrange ? this.shipBlue : this.shipOrange;
+        const rs = this.remoteShipState;
+        remoteShip.container.setPosition(rs.x, rs.y);
+        remoteShip.container.setRotation(rs.rotation);
+      }
+      return;
+    }
 
     // Standardize delta to seconds (clamped to prevent tunnel glitch on tab switch)
     const dt = Math.min(delta / 1000, 0.05);
@@ -1336,6 +1364,7 @@ export class StarCatcherScene extends Phaser.Scene {
     this.difficulty = difficulty;
     this.myRole = myRole;
     this.scores = { orange: 0, blue: 0 };
+    this.isMatchStarted = this.mode !== "online";
     this.isGameOver = false;
     this.isPaused = false;
 
@@ -1382,7 +1411,9 @@ export class StarCatcherScene extends Phaser.Scene {
 
     // Reset Star
     if (this.starRespawnTimer) this.starRespawnTimer.remove();
-    this.spawnStar();
+    if (this.mode !== "online") {
+      this.spawnStar();
+    }
 
     // Reset Black Hole
     if (this.blackHoleDurationTimer) this.blackHoleDurationTimer.remove();
@@ -1391,7 +1422,9 @@ export class StarCatcherScene extends Phaser.Scene {
     this.blackHoleState.scale = 0;
     this.blackHoleSprite.setVisible(false);
     this.blackHoleCoreGlow.setVisible(false);
-    this.setupBlackHoleLifecycle();
+    if (this.mode !== "online") {
+      this.setupBlackHoleLifecycle();
+    }
 
     this.callbacks.onScoreUpdate(this.scores);
   }

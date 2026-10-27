@@ -57,6 +57,7 @@ export interface StarCatcherCallbacks {
   onStarSpawn?: (pos: { x: number; y: number }) => void;
   onBlackHoleSpawn?: (pos: { x: number; y: number }) => void;
   onBlackHoleDespawn?: () => void;
+  onSceneReady?: () => void;
 }
 
 export interface StarCatcherInitData {

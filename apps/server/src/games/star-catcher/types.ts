@@ -13,6 +13,8 @@ export interface StarCatcherGameState {
   scores: StarCatcherScore;
   winner: PlatformPlayer | null;
   playerRoles: Record<string, PlatformPlayer>; // playerId -> "orange" | "blue"
+  readyPlayers?: string[];
+  initialStar?: { x: number; y: number } | null;
   rematchRequests: string[];
   resultReason?: "win" | "disconnect_forfeit";
   disconnectGraceExpiresAt?: number | null;
