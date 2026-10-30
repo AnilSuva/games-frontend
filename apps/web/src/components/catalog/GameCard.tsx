@@ -290,6 +290,44 @@ function GameIllustration({ id }: { id: string }) {
           </svg>
         </div>
       );
+    case "light-fingers":
+      return (
+        <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-2 relative overflow-hidden">
+          <svg className="w-auto h-20 max-w-full" viewBox="0 0 96 72" fill="none">
+            {/* Top Vault Bar (Blue) */}
+            <rect x="18" y="4" width="60" height="6" rx="2" fill="#1e293b" />
+            <rect x="22" y="8" width="52" height="2" fill="#2563eb" />
+
+            {/* Bottom Vault Bar (Orange) */}
+            <rect x="18" y="62" width="60" height="6" rx="2" fill="#1e293b" />
+            <rect x="22" y="62" width="52" height="2" fill="#e0530a" />
+
+            {/* Blue Arm from Top */}
+            <line x1="38" y1="10" x2="38" y2="24" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="38" cy="25" r="4.5" fill="#1e293b" stroke="#2563eb" strokeWidth="1.5" />
+
+            {/* Orange Arm from Bottom */}
+            <line x1="58" y1="62" x2="58" y2="48" stroke="#e0530a" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="58" cy="47" r="4.5" fill="#1e293b" stroke="#e0530a" strokeWidth="1.5" />
+
+            {/* Cash Banknote in Center */}
+            <rect x="32" y="27" width="32" height="18" rx="2.5" fill="#15803d" stroke="#14532d" strokeWidth="1.5" />
+            <rect x="34" y="29" width="28" height="14" rx="1.5" fill="none" stroke="#86efac" strokeWidth="0.8" />
+            <circle cx="48" cy="36" r="4.5" fill="#166534" stroke="#86efac" strokeWidth="0.8" />
+            <text x="48" y="39.5" textAnchor="middle" fill="#f0fdf4" fontSize="8" fontWeight="bold">$</text>
+
+            {/* Gold Coin Left */}
+            <circle cx="25" cy="38" r="7.5" fill="#f59e0b" stroke="#b45309" strokeWidth="1.5" />
+            <circle cx="25" cy="38" r="5" fill="#fbbf24" stroke="#fde047" strokeWidth="0.8" />
+            <text x="25" y="41" textAnchor="middle" fill="#78350f" fontSize="7" fontWeight="bold">1</text>
+
+            {/* Gold Coin Right */}
+            <circle cx="71" cy="34" r="7.5" fill="#f59e0b" stroke="#b45309" strokeWidth="1.5" />
+            <circle cx="71" cy="34" r="5" fill="#fbbf24" stroke="#fde047" strokeWidth="0.8" />
+            <text x="71" y="37" textAnchor="middle" fill="#78350f" fontSize="7" fontWeight="bold">1</text>
+          </svg>
+        </div>
+      );
     default:
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center text-[#9c978e]">

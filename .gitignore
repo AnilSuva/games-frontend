@@ -48,3 +48,6 @@ next-env.d.ts
 *.apkm
 *.xapk
 
+# local reference / reverse engineering dumps
+reference/
+

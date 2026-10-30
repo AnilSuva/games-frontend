@@ -204,6 +204,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/arcade/typing-race/components/TypingRaceGame"),
   },
   {
+    id: "light-fingers",
+    title: "Light Fingers",
+    shortDescription: "Fast-paced coin and cash grabbing duel.",
+    description:
+      "Reflex money-stealing duel. Drag coins and cash into your safe vault before your rival does. Pull together on banknotes to rip them in half. First to 15 points wins!",
+    category: "arcade",
+    engine: "react-dom",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot"],
+    defaultOrientation: "portrait",
+    aspectRatio: "responsive",
+    iconName: "circle-dot",
+    badgeText: "Reflex Duel",
+    tags: ["Arcade", "2-Player", "Duel", "Reflexes", "Fast Action"],
+    loader: () =>
+      import("@/games/arcade/light-fingers/components/LightFingersGame"),
+  },
+  {
     id: "archery",
     title: "Archery",
     shortDescription: "Precision target shooting with dynamic wind.",

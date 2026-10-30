@@ -37,4 +37,7 @@ export const CARTRIDGE_MAP: Record<
   "typing-race": React.lazy(
     () => import("@/games/arcade/typing-race/components/TypingRaceGame")
   ),
+  "light-fingers": React.lazy(
+    () => import("@/games/arcade/light-fingers/components/LightFingersGame")
+  ),
 };

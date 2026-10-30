@@ -14,10 +14,10 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
   const allGames = getAllGames();
   const visibleGames = getVisibleGames();
 
-  assert.equal(allGames.length, 10, "Visible games and tools should appear in the catalog");
-  assert.equal(visibleGames.length, 10);
+  assert.equal(allGames.length, 11, "Visible games and tools should appear in the catalog");
+  assert.equal(visibleGames.length, 11);
 
-  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race"];
+  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "light-fingers"];
   const returnedIds = allGames.map((g) => g.id);
   assert.deepEqual(returnedIds.sort(), expectedIds.sort());
 
@@ -48,7 +48,7 @@ test("Registry: categories only contain visible playable games", () => {
   const arcadeIds = arcadeGames.map((g) => g.id).sort();
 
   assert.deepEqual(boardIds, ["checkers", "connect-four", "dots-and-boxes", "tic-tac-toe"]);
-  assert.deepEqual(arcadeIds, ["brick-blast", "knife-thrower", "ping-pong", "star-catcher", "typing-race"]);
+  assert.deepEqual(arcadeIds, ["brick-blast", "knife-thrower", "light-fingers", "ping-pong", "star-catcher", "typing-race"]);
   assert.deepEqual(randomRoyaleTools.map((game) => game.id), ["spin-wheel"]);
 
   assert.ok(!boardIds.includes("chess"));
@@ -104,5 +104,5 @@ test("Registry: unreleased definitions are preserved in master registry for futu
 
 test("Registry: getAllAvailableGameIds matches playable games for static params", () => {
   const ids = getAllAvailableGameIds();
-  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "dots-and-boxes", "knife-thrower", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
+  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "dots-and-boxes", "knife-thrower", "light-fingers", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
 });
