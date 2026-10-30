@@ -7,6 +7,7 @@ import { PingPongAdapter } from "./ping-pong/PingPongAdapter.js";
 import { DotsAndBoxesAdapter } from "./dots-and-boxes/DotsAndBoxesAdapter.js";
 import { StarCatcherAdapter } from "./star-catcher/StarCatcherAdapter.js";
 import { TypingRaceAdapter } from "./typing-race/TypingRaceAdapter.js";
+import { DodgeArenaAdapter } from "./dodge-arena/DodgeArenaAdapter.js";
 
 export * from "./GameAdapter.js";
 export * from "./tic-tac-toe/index.js";
@@ -55,6 +56,14 @@ export type {
   PlayerRaceStats,
 } from "./typing-race/types.js";
 
+export { DodgeArenaAdapter } from "./dodge-arena/DodgeArenaAdapter.js";
+export type {
+  DodgeArenaGameState,
+  DodgeArenaAction,
+  DodgeArenaPlayer,
+  DodgeArenaLives,
+} from "./dodge-arena/types.js";
+
 export function createDefaultGameRegistry(): GameAdapterRegistry {
   const registry = new GameAdapterRegistry();
   registry.register(new TicTacToeAdapter());
@@ -65,6 +74,7 @@ export function createDefaultGameRegistry(): GameAdapterRegistry {
   registry.register(new DotsAndBoxesAdapter());
   registry.register(new StarCatcherAdapter());
   registry.register(new TypingRaceAdapter());
+  registry.register(new DodgeArenaAdapter());
   return registry;
 }
 

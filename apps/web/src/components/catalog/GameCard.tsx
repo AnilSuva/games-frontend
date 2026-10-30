@@ -190,6 +190,38 @@ function GameIllustration({ id }: { id: string }) {
           </svg>
         </div>
       );
+    case "dodge-arena":
+      return (
+        <div className="w-full h-24 rounded-lg bg-[#0f172a] border border-[#334155] flex items-center justify-center p-2 relative overflow-hidden">
+          <svg className="w-auto h-20 max-w-full" viewBox="0 0 96 72" fill="none">
+            {/* Arena Grid */}
+            <rect x="8" y="6" width="80" height="60" rx="8" fill="#111827" stroke="#334155" strokeWidth="1.5" />
+            <line x1="8" y1="36" x2="88" y2="36" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 3" />
+            <line x1="48" y1="6" x2="48" y2="66" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 3" />
+
+            {/* Falling Strike Hazard Telegraph */}
+            <circle cx="48" cy="36" r="14" fill="#ef4444" fillOpacity="0.2" stroke="#ef4444" strokeWidth="1.2" strokeDasharray="3 2" />
+            <circle cx="48" cy="36" r="7" stroke="#f59e0b" strokeWidth="1.2" />
+            <line x1="42" y1="36" x2="54" y2="36" stroke="#ef4444" strokeWidth="1" />
+            <line x1="48" y1="30" x2="48" y2="42" stroke="#ef4444" strokeWidth="1" />
+
+            {/* Sweeping Laser Beam at Top */}
+            <line x1="10" y1="18" x2="86" y2="18" stroke="#ef4444" strokeWidth="2.5" strokeOpacity="0.8" />
+            <line x1="10" y1="18" x2="86" y2="18" stroke="#ffffff" strokeWidth="1" strokeOpacity="0.9" />
+
+            {/* Blue Player (Top-Right) */}
+            <circle cx="72" cy="26" r="5" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="73" cy="27" r="1.5" fill="#ffffff" />
+
+            {/* Orange Player (Bottom-Left) */}
+            <circle cx="24" cy="48" r="5" fill="#f97316" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="23" cy="47" r="1.5" fill="#ffffff" />
+
+            {/* Bouncing Hazard Orb */}
+            <circle cx="32" cy="24" r="3.5" fill="#d97706" stroke="#fef08a" strokeWidth="1" />
+          </svg>
+        </div>
+      );
     case "star-catcher":
       return (
         <div className="w-full h-24 rounded-lg bg-[#090d16] border border-[#1e293b] flex items-center justify-center p-2 relative overflow-hidden">

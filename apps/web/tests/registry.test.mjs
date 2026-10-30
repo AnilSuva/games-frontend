@@ -17,7 +17,7 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
   assert.equal(allGames.length, 11, "Visible games and tools should appear in the catalog");
   assert.equal(visibleGames.length, 11);
 
-  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "light-fingers"];
+  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "dodge-arena"];
   const returnedIds = allGames.map((g) => g.id);
   assert.deepEqual(returnedIds.sort(), expectedIds.sort());
 
@@ -30,7 +30,7 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
 test("Registry: unfinished games are excluded from the visible catalog", () => {
   const visibleIds = new Set(getAllGames().map((g) => g.id));
 
-  const unfinishedIds = ["chess", "archery", "platformer", "endless-runner"];
+  const unfinishedIds = ["chess", "archery", "platformer", "endless-runner", "light-fingers"];
   for (const id of unfinishedIds) {
     assert.ok(
       !visibleIds.has(id),
@@ -48,13 +48,14 @@ test("Registry: categories only contain visible playable games", () => {
   const arcadeIds = arcadeGames.map((g) => g.id).sort();
 
   assert.deepEqual(boardIds, ["checkers", "connect-four", "dots-and-boxes", "tic-tac-toe"]);
-  assert.deepEqual(arcadeIds, ["brick-blast", "knife-thrower", "light-fingers", "ping-pong", "star-catcher", "typing-race"]);
+  assert.deepEqual(arcadeIds, ["brick-blast", "dodge-arena", "knife-thrower", "ping-pong", "star-catcher", "typing-race"]);
   assert.deepEqual(randomRoyaleTools.map((game) => game.id), ["spin-wheel"]);
 
   assert.ok(!boardIds.includes("chess"));
   assert.ok(!arcadeIds.includes("archery"));
   assert.ok(!arcadeIds.includes("platformer"));
   assert.ok(!arcadeIds.includes("endless-runner"));
+  assert.ok(!arcadeIds.includes("light-fingers"));
 });
 
 test("Registry: getGameMetadata returns undefined for unfinished games (protecting routes)", () => {
@@ -77,6 +78,8 @@ test("Registry: getGameMetadata returns undefined for unfinished games (protecti
   assert.equal(getGameMetadata("star-catcher")?.title, "Star Catcher");
   assert.ok(getGameMetadata("typing-race") !== undefined);
   assert.equal(getGameMetadata("typing-race")?.title, "Typing Race");
+  assert.ok(getGameMetadata("dodge-arena") !== undefined);
+  assert.equal(getGameMetadata("dodge-arena")?.title, "Dodge Arena");
   assert.equal(getGameMetadata("spin-wheel")?.title, "Spin Wheel");
 
   // Unfinished games must return undefined so dynamic route triggers 404 notFound()
@@ -84,6 +87,7 @@ test("Registry: getGameMetadata returns undefined for unfinished games (protecti
   assert.equal(getGameMetadata("archery"), undefined);
   assert.equal(getGameMetadata("platformer"), undefined);
   assert.equal(getGameMetadata("endless-runner"), undefined);
+  assert.equal(getGameMetadata("light-fingers"), undefined);
   assert.equal(getGameMetadata("non-existent"), undefined);
 });
 
@@ -96,6 +100,11 @@ test("Registry: unreleased definitions are preserved in master registry for futu
   assert.equal(chess?.status, "coming-soon");
   assert.equal(chess?.isVisible, false);
 
+  const lightFingers = getRegisteredGameMetadata("light-fingers");
+  assert.ok(lightFingers !== undefined);
+  assert.equal(lightFingers?.status, "coming-soon");
+  assert.equal(lightFingers?.isVisible, false);
+
   const checkers = getRegisteredGameMetadata("checkers");
   assert.ok(checkers !== undefined);
   assert.equal(checkers?.status, "available");
@@ -104,5 +113,5 @@ test("Registry: unreleased definitions are preserved in master registry for futu
 
 test("Registry: getAllAvailableGameIds matches playable games for static params", () => {
   const ids = getAllAvailableGameIds();
-  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "dots-and-boxes", "knife-thrower", "light-fingers", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
+  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "dodge-arena", "dots-and-boxes", "knife-thrower", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
 });

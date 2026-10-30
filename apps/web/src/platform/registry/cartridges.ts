@@ -31,6 +31,9 @@ export const CARTRIDGE_MAP: Record<
   "star-catcher": React.lazy(
     () => import("@/games/arcade/star-catcher/components/StarCatcherGame")
   ),
+  "dodge-arena": React.lazy(
+    () => import("@/games/arcade/dodge-arena/components/DodgeArenaGame")
+  ),
   "dots-and-boxes": React.lazy(
     () => import("@/games/board/dots-and-boxes/components/DotsAndBoxesGame")
   ),

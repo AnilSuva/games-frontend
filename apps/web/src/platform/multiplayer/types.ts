@@ -167,6 +167,29 @@ export interface OnlinePingPongState {
 
 export type StarCatcherOnlinePlayer = "orange" | "blue";
 
+export type DodgeArenaOnlinePlayer = "orange" | "blue";
+
+export interface DodgeArenaLives {
+  orange: number;
+  blue: number;
+}
+
+export interface OnlineDodgeArenaState {
+  status: "waiting" | "in_progress" | "won" | "draw" | "abandoned";
+  startingPlayer: DodgeArenaOnlinePlayer;
+  lives: DodgeArenaLives;
+  wave: number;
+  winner: DodgeArenaOnlinePlayer | "draw" | null;
+  playerRoles: Record<string, DodgeArenaOnlinePlayer>;
+  readyPlayers?: string[];
+  seed: number;
+  rematchRequests: string[];
+  resultReason?: "win" | "draw" | "disconnect_forfeit";
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+  matchStartTime?: number;
+}
+
 export interface StarCatcherOnlineScore {
   orange: number;
   blue: number;

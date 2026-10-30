@@ -8,6 +8,8 @@ interface GamePageProps {
   params: Promise<{ gameId: string }>;
 }
 
+export const dynamicParams = true;
+
 /**
  * Pre-generate static routes for all available games at build time.
  */
