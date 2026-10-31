@@ -11,6 +11,7 @@ import { useOnlineDodgeArena } from "@/platform/multiplayer/useOnlineDodgeArena"
 import { GAME_HEIGHT, GAME_WIDTH } from "../config/balance";
 import type { DodgeArenaScene } from "../game/DodgeArenaScene";
 import { dodgeAudio } from "../game/audio";
+import { computeArenaDimensions, type LayoutMetrics } from "../logic/layout";
 import type { BotDifficulty, DodgePlayerColor, GameMode } from "../logic/types";
 
 const DODGE_ARENA_MODES: GameModeOption[] = [
@@ -68,8 +69,17 @@ export default function DodgeArenaGame({
   onLifecycleChange,
 }: GameHostProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const phaserGameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<DodgeArenaScene | null>(null);
+
+  // Responsive arena layout metrics
+  const [layoutMetrics, setLayoutMetrics] = useState<LayoutMetrics>(() => {
+    if (typeof window !== "undefined") {
+      return computeArenaDimensions(window.innerWidth, window.innerHeight);
+    }
+    return computeArenaDimensions(GAME_WIDTH, GAME_HEIGHT);
+  });
 
   // Pre-game state
   const [inModeSelection, setInModeSelection] = useState<boolean>(true);
@@ -414,6 +424,36 @@ export default function DodgeArenaGame({
     };
   }, [inModeSelection, isOnlineLobby, selectedMode, difficulty]);
 
+  // Dynamically recalculate arena layout and trigger Phaser scale refresh
+  useEffect(() => {
+    const el = rootContainerRef.current;
+    if (!el) return;
+
+    const handleResize = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) {
+        setLayoutMetrics(computeArenaDimensions(w, h));
+        if (phaserGameRef.current) {
+          phaserGameRef.current.scale.refresh();
+        }
+      }
+    };
+
+    handleResize();
+
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(el);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [inModeSelection, isOnlineLobby]);
+
   // Non-online countdown trigger once Phaser is ready
   useEffect(() => {
     if (selectedMode === "online" || !isPhaserReady || isMatchStarted || countdown !== null) {
@@ -532,8 +572,101 @@ export default function DodgeArenaGame({
     return "Orange";
   })();
 
+  // Shared Top HUD sub-renderer
+  const renderTopHUD = (isOverlay = false) => (
+    <div
+      className={
+        isOverlay
+          ? "absolute top-2 left-2 right-2 z-20 flex items-center justify-between pointer-events-none"
+          : "w-full max-w-lg mx-auto flex items-center justify-between pointer-events-none px-2.5 sm:px-4 py-1"
+      }
+    >
+      {/* Blue Player Lives (Guest / Top) */}
+      <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.9)]" />
+        <span className="text-[11px] font-bold text-blue-300 mr-0.5">{bluePlayerLabel}</span>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3].map((num) => (
+            <HeartIcon key={num} filled={lives.blue >= num} color="blue" />
+          ))}
+        </div>
+      </div>
+
+      {/* Match Clock & Wave Badge */}
+      <div className="flex flex-col items-center bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1 shadow-md">
+        <span className="text-[10px] font-black tracking-wider text-amber-400 uppercase font-mono">
+          Wave {currentWave}
+        </span>
+        <span className="text-xs font-mono font-bold text-slate-200">
+          {formatTime(matchSeconds)}
+        </span>
+      </div>
+
+      {/* Orange Player Lives (Host / Bottom) */}
+      <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
+        <div className="flex items-center gap-1">
+          {[3, 2, 1].map((num) => (
+            <HeartIcon key={num} filled={lives.orange >= num} color="orange" />
+          ))}
+        </div>
+        <span className="text-[11px] font-bold text-orange-300 ml-0.5">
+          {orangePlayerLabel}
+        </span>
+        <span className="w-2.5 h-2.5 rounded-full bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.9)]" />
+      </div>
+    </div>
+  );
+
+  // Shared Bottom Navigation / Quick Controls sub-renderer
+  const renderBottomNav = (isOverlay = false) => (
+    <div
+      className={
+        isOverlay
+          ? "absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between pointer-events-none"
+          : "w-full max-w-lg mx-auto flex items-center justify-between pointer-events-none px-2.5 sm:px-4 py-1"
+      }
+    >
+      <button
+        type="button"
+        onClick={handleBackToModeSelect}
+        className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] sm:text-[11px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
+        aria-label="Change Mode"
+      >
+        ← Modes
+      </button>
+
+      {!isOverlay && (
+        <span className="text-[10px] text-slate-400 font-medium px-2 text-center">
+          {selectedMode === "1v1"
+            ? "Split-Touch: Blue (Top) • Orange (Bottom)"
+            : "Touch & Drag to Dodge"}
+        </span>
+      )}
+
+      {selectedMode !== "online" && (
+        <button
+          type="button"
+          onClick={handleRestart}
+          className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] sm:text-[11px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
+          aria-label="Reset Match"
+        >
+          Reset
+        </button>
+      )}
+    </div>
+  );
+
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#070a14] p-1.5 sm:p-3">
+    <div
+      ref={rootContainerRef}
+      className={`relative w-full h-full flex flex-col items-center select-none overflow-hidden bg-[#070a14] touch-none ${
+        inModeSelection || isOnlineLobby
+          ? "justify-center p-4"
+          : layoutMetrics.isMobile
+          ? "p-0 justify-between"
+          : "p-2 sm:p-4 justify-center"
+      }`}
+    >
       {/* 1. Mode Selection Screen */}
       {inModeSelection && (
         <div className="w-full max-w-sm px-4 py-6 z-20">
@@ -562,219 +695,188 @@ export default function DodgeArenaGame({
         </div>
       )}
 
-      {/* 3. In-Game Centered Aspect-Ratio Arena & Overlays */}
+      {/* 3. In-Game Responsive Layout & Overlays */}
       {!inModeSelection && !isOnlineLobby && (
-        <div
-          className="relative flex flex-col items-center justify-center rounded-2xl overflow-hidden border border-slate-700/80 shadow-[0_0_35px_rgba(0,0,0,0.85)] ring-1 ring-white/10 bg-[#0f172a]"
-          style={{
-            width:
-              "min(calc(100% - 0.5rem), calc((100dvh - 5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 480 / 640), 480px)",
-            aspectRatio: "480 / 640",
-            maxHeight: "100%",
-          }}
-        >
-          {/* Top Integrated HUD */}
-          <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between pointer-events-none">
-            {/* Blue Player Lives (Guest / Top) */}
-            <div className="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.9)]" />
-              <span className="text-[11px] font-bold text-blue-300 mr-0.5">{bluePlayerLabel}</span>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3].map((num) => (
-                  <HeartIcon key={num} filled={lives.blue >= num} color="blue" />
-                ))}
-              </div>
-            </div>
-
-            {/* Match Clock & Wave Badge */}
-            <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1 shadow-md">
-              <span className="text-[10px] font-black tracking-wider text-amber-400 uppercase font-mono">
-                Wave {currentWave}
-              </span>
-              <span className="text-xs font-mono font-bold text-slate-200">
-                {formatTime(matchSeconds)}
-              </span>
-            </div>
-
-            {/* Orange Player Lives (Host / Bottom) */}
-            <div className="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
-              <div className="flex items-center gap-1">
-                {[3, 2, 1].map((num) => (
-                  <HeartIcon key={num} filled={lives.orange >= num} color="orange" />
-                ))}
-              </div>
-              <span className="text-[11px] font-bold text-orange-300 ml-0.5">
-                {orangePlayerLabel}
-              </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.9)]" />
-            </div>
-          </div>
-
-          {/* Quick Nav Bar (Modes & Reset buttons) */}
-          <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between pointer-events-none">
-            <button
-              type="button"
-              onClick={handleBackToModeSelect}
-              className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
-              aria-label="Change Mode"
-            >
-              ← Modes
-            </button>
-
-            {selectedMode !== "online" && (
-              <button
-                type="button"
-                onClick={handleRestart}
-                className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
-                aria-label="Reset Match"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Disconnect Grace Period Overlay */}
-          {online.isMatchPaused && online.disconnectGraceSecondsRemaining !== null && (
-            <div className="absolute top-14 z-40 bg-amber-950/95 border border-amber-500/80 rounded-xl px-4 py-2 text-center text-amber-200 shadow-xl max-w-xs animate-pulse">
-              <p className="text-xs font-semibold">Opponent disconnected</p>
-              <p className="text-[11px] text-amber-300/80">
-                Waiting to reconnect: {online.disconnectGraceSecondsRemaining}s
-              </p>
+        <>
+          {/* Top Bar on Mobile View (Positioned above arena to guarantee zero overlap) */}
+          {layoutMetrics.isMobile && (
+            <div className="w-full shrink-0 flex items-center justify-center pt-1.5 pb-0.5 z-20 bg-slate-950/40 backdrop-blur-xs border-b border-slate-800/50">
+              {renderTopHUD(false)}
             </div>
           )}
 
-          {/* Gameplay Instructions & Objective Overlay */}
-          {!isMatchStarted && (
+          {/* Central Arena Stage (Maximizes arena within available viewport space) */}
+          <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
             <div
-              className="absolute inset-0 z-35 flex flex-col items-center justify-center p-4 bg-black/60 backdrop-blur-[2px] transition-opacity duration-300 cursor-pointer"
-              onClick={handleStartImmediately}
+              className={`relative flex flex-col items-center justify-center overflow-hidden bg-[#0f172a] ${
+                layoutMetrics.isMobile
+                  ? "rounded-none border-0 shadow-none ring-0"
+                  : "rounded-2xl border border-slate-700/80 shadow-[0_0_35px_rgba(0,0,0,0.85)] ring-1 ring-white/10"
+              }`}
+              style={{
+                width: `${layoutMetrics.width}px`,
+                height: `${layoutMetrics.height}px`,
+                maxWidth: "100%",
+                maxHeight: "100%",
+              }}
             >
-              <div
-                className="relative w-full max-w-xs rounded-2xl bg-slate-900/95 border border-slate-700/80 p-4 shadow-2xl text-center flex flex-col items-center pointer-events-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header Tag */}
-                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 tracking-wider uppercase mb-2">
-                  <span>Survival Arena</span>
+              {/* Overlay Top HUD for Tablet & Desktop View */}
+              {!layoutMetrics.isMobile && renderTopHUD(true)}
+
+              {/* Overlay Quick Nav for Tablet & Desktop View */}
+              {!layoutMetrics.isMobile && renderBottomNav(true)}
+
+              {/* Disconnect Grace Period Overlay */}
+              {online.isMatchPaused && online.disconnectGraceSecondsRemaining !== null && (
+                <div className="absolute top-14 z-40 bg-amber-950/95 border border-amber-500/80 rounded-xl px-4 py-2 text-center text-amber-200 shadow-xl max-w-xs animate-pulse">
+                  <p className="text-xs font-semibold">Opponent disconnected</p>
+                  <p className="text-[11px] text-amber-300/80">
+                    Waiting to reconnect: {online.disconnectGraceSecondsRemaining}s
+                  </p>
                 </div>
+              )}
 
-                <h2 className="text-base font-black text-white tracking-wide uppercase">
-                  Dodge Arena
-                </h2>
-
-                {/* Short Objective */}
-                <p className="text-xs text-slate-300 mt-1 mb-3 font-medium leading-relaxed">
-                  Avoid the hazards. Survive longer than your opponent!
-                </p>
-
-                {/* Controls Guide */}
-                <div className="w-full bg-slate-800/80 border border-slate-700/60 rounded-xl p-2.5 text-left mb-3 flex flex-col gap-2">
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs">🖥️</span>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Desktop
-                      </p>
-                      <p className="text-[11px] text-slate-200 font-medium">
-                        WASD / Arrow Keys / Click &amp; Hold Mouse
-                      </p>
+              {/* Gameplay Instructions & Objective Overlay */}
+              {!isMatchStarted && (
+                <div
+                  className="absolute inset-0 z-35 flex flex-col items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-[2px] transition-opacity duration-300 cursor-pointer"
+                  onClick={handleStartImmediately}
+                >
+                  <div
+                    className="relative w-full max-w-xs rounded-2xl bg-slate-900/95 border border-slate-700/80 p-3.5 sm:p-4 shadow-2xl text-center flex flex-col items-center pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header Tag */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 tracking-wider uppercase mb-2">
+                      <span>Survival Arena</span>
                     </div>
-                  </div>
-                  <div className="h-px bg-slate-700/50" />
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs">📱</span>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Mobile
-                      </p>
-                      <p className="text-[11px] text-slate-200 font-medium">
-                        Touch / Virtual Joystick
-                      </p>
-                    </div>
-                  </div>
-                  {selectedMode === "1v1" && (
-                    <>
+
+                    <h2 className="text-base font-black text-white tracking-wide uppercase">
+                      Dodge Arena
+                    </h2>
+
+                    {/* Short Objective */}
+                    <p className="text-xs text-slate-300 mt-1 mb-3 font-medium leading-relaxed">
+                      Avoid the hazards. Survive longer than your opponent!
+                    </p>
+
+                    {/* Controls Guide */}
+                    <div className="w-full bg-slate-800/80 border border-slate-700/60 rounded-xl p-2.5 text-left mb-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs">🖥️</span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Desktop
+                          </p>
+                          <p className="text-[11px] text-slate-200 font-medium">
+                            WASD / Arrow Keys / Click &amp; Hold Mouse
+                          </p>
+                        </div>
+                      </div>
                       <div className="h-px bg-slate-700/50" />
-                      <p className="text-[10px] text-amber-300 font-semibold text-center">
-                        Orange (Bottom Half) • Blue (Top Half)
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                {/* Countdown / Start Prompt */}
-                <div className="flex flex-col items-center gap-1">
-                  {countdown !== null ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400 font-mono">Match starts in:</span>
-                      <span className="text-xl font-black text-amber-400 font-mono animate-pulse">
-                        {countdown === 0 ? "GO!" : countdown}
-                      </span>
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs">📱</span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Mobile
+                          </p>
+                          <p className="text-[11px] text-slate-200 font-medium">
+                            Touch / Virtual Joystick
+                          </p>
+                        </div>
+                      </div>
+                      {selectedMode === "1v1" && (
+                        <>
+                          <div className="h-px bg-slate-700/50" />
+                          <p className="text-[10px] text-amber-300 font-semibold text-center">
+                            Orange (Bottom Half) • Blue (Top Half)
+                          </p>
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <span className="text-xs text-slate-400 font-mono animate-pulse">
-                      Priming Arena...
-                    </span>
-                  )}
-                  {selectedMode !== "online" && (
-                    <button
-                      type="button"
-                      onClick={handleStartImmediately}
-                      className="mt-1 text-[10px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
-                    >
-                      Tap here to start immediately
-                    </button>
-                  )}
+
+                    {/* Countdown / Start Prompt */}
+                    <div className="flex flex-col items-center gap-1">
+                      {countdown !== null ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 font-mono">Match starts in:</span>
+                          <span className="text-xl font-black text-amber-400 font-mono animate-pulse">
+                            {countdown === 0 ? "GO!" : countdown}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-mono animate-pulse">
+                          Priming Arena...
+                        </span>
+                      )}
+                      {selectedMode !== "online" && (
+                        <button
+                          type="button"
+                          onClick={handleStartImmediately}
+                          className="mt-1 text-[10px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                        >
+                          Tap here to start immediately
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Large Countdown Overlay when instruction is dismissed */}
+              {countdown !== null && isMatchStarted && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+                  <div className="text-6xl font-black text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.9)] animate-pulse font-mono">
+                    {countdown === 0 ? "GO!" : countdown}
+                  </div>
+                </div>
+              )}
+
+              {/* Phaser Canvas Container */}
+              <div
+                ref={containerRef}
+                className="w-full h-full touch-none select-none"
+                tabIndex={0}
+                aria-label="Dodge Arena Canvas"
+              />
+
+              {/* Result Popup */}
+              {gameOverResult !== null && !isPopupDismissed && (
+                <GameResultPopup
+                  resultText={
+                    gameOverResult === "draw"
+                      ? "Draw Game"
+                      : gameOverResult === "orange"
+                      ? "Orange Won!"
+                      : "Blue Won!"
+                  }
+                  accentColor={
+                    gameOverResult === "draw"
+                      ? null
+                      : gameOverResult === "orange"
+                      ? "#f97316"
+                      : "#3b82f6"
+                  }
+                  playAgainText={
+                    selectedMode === "online" && online.opponentRequestedRematch
+                      ? "Accept Rematch"
+                      : "Play Again"
+                  }
+                  onPlayAgain={handleRestart}
+                  onClose={() => setIsPopupDismissed(true)}
+                  onHome={handleBackToModeSelect}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Bar on Mobile View (Positioned below arena with safe area padding) */}
+          {layoutMetrics.isMobile && (
+            <div className="w-full shrink-0 flex items-center justify-center pt-0.5 pb-1 z-20 bg-slate-950/40 backdrop-blur-xs border-t border-slate-800/50 pb-[env(safe-area-inset-bottom,0px)]">
+              {renderBottomNav(false)}
             </div>
           )}
-
-          {/* Large Countdown Overlay when instruction is dismissed */}
-          {countdown !== null && isMatchStarted && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-              <div className="text-6xl font-black text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.9)] animate-pulse font-mono">
-                {countdown === 0 ? "GO!" : countdown}
-              </div>
-            </div>
-          )}
-
-          {/* Phaser Canvas Container */}
-          <div
-            ref={containerRef}
-            className="w-full h-full touch-none select-none"
-            tabIndex={0}
-            aria-label="Dodge Arena Canvas"
-          />
-
-          {/* Result Popup */}
-          {gameOverResult !== null && !isPopupDismissed && (
-            <GameResultPopup
-              resultText={
-                gameOverResult === "draw"
-                  ? "Draw Game"
-                  : gameOverResult === "orange"
-                  ? "Orange Won!"
-                  : "Blue Won!"
-              }
-              accentColor={
-                gameOverResult === "draw"
-                  ? null
-                  : gameOverResult === "orange"
-                  ? "#f97316"
-                  : "#3b82f6"
-              }
-              playAgainText={
-                selectedMode === "online" && online.opponentRequestedRematch
-                  ? "Accept Rematch"
-                  : "Play Again"
-              }
-              onPlayAgain={handleRestart}
-              onClose={() => setIsPopupDismissed(true)}
-              onHome={handleBackToModeSelect}
-            />
-          )}
-        </div>
+        </>
       )}
     </div>
   );

@@ -20,6 +20,7 @@ import {
   WAVE_CONFIGURATIONS,
 } from "../src/games/arcade/dodge-arena/config/balance.ts";
 import { SeededPRNG } from "../src/games/arcade/dodge-arena/logic/prng.ts";
+import { computeArenaDimensions } from "../src/games/arcade/dodge-arena/logic/layout.ts";
 import {
   checkHazardCollision,
   createBouncingHazard,
@@ -516,4 +517,48 @@ test("Local 1v1: both players move independently without crosstalk", () => {
   assert.ok(sim.state.players.blue.x < blueStart.x, "Blue should move left");
   assert.equal(sim.state.players.orange.lives, 3);
   assert.equal(sim.state.players.blue.lives, 3);
+});
+
+test("Responsive Layout: Mobile portrait maximizes arena width edge-to-edge while preserving 480:640 aspect ratio", () => {
+  // Narrow phone: iPhone SE (375 x 611 available height)
+  const se = computeArenaDimensions(375, 611);
+  assert.equal(se.isMobile, true);
+  assert.equal(se.width, 375, "Narrow phone should use 100% of available screen width");
+  assert.equal(se.height, 500, "Height should maintain exact 480:640 aspect ratio (375 * 640 / 480 = 500)");
+  assert.ok(Math.abs(se.width / se.height - 480 / 640) < 0.01);
+
+  // Standard phone: iPhone 13/14 (390 x 720 available height)
+  const phone = computeArenaDimensions(390, 720);
+  assert.equal(phone.isMobile, true);
+  assert.equal(phone.width, 390, "Standard phone should use 100% of available screen width");
+  assert.equal(phone.height, 520, "Height should maintain exact 480:640 aspect ratio (390 * 640 / 480 = 520)");
+  assert.ok(Math.abs(phone.width / phone.height - 480 / 640) < 0.01);
+
+  // Large phone: iPhone 15 Pro Max (430 x 800 available height)
+  const maxPhone = computeArenaDimensions(430, 800);
+  assert.equal(maxPhone.isMobile, true);
+  assert.equal(maxPhone.width, 430, "Large phone should use 100% of available screen width");
+  assert.equal(maxPhone.height, 573, "Height should maintain exact 480:640 aspect ratio (430 * 640 / 480 = 573)");
+  assert.ok(Math.abs(maxPhone.width / maxPhone.height - 480 / 640) < 0.01);
+});
+
+test("Responsive Layout: Tablet scales up with balanced margins and Desktop preserves 480x640 unit", () => {
+  // Tablet: iPad (768 x 920 available height)
+  const tablet = computeArenaDimensions(768, 920);
+  assert.equal(tablet.isTablet, true);
+  assert.equal(tablet.width, 580, "Tablet should scale up larger than mobile with balanced margins");
+  assert.equal(tablet.height, 773, "Tablet height should maintain 480:640 aspect ratio");
+  assert.ok(Math.abs(tablet.width / tablet.height - 480 / 640) < 0.01);
+
+  // Desktop: 1440 x 844 available height
+  const desktop = computeArenaDimensions(1440, 844);
+  assert.equal(desktop.isDesktop, true);
+  assert.equal(desktop.width, 480, "Desktop should preserve polished centered 480px width");
+  assert.equal(desktop.height, 640, "Desktop should preserve polished 640px height");
+
+  // Landscape mobile: 844 x 360
+  const landscape = computeArenaDimensions(844, 360);
+  assert.equal(landscape.isLandscapeMobile, true);
+  assert.ok(landscape.height <= 360, "Landscape mobile must fit height without clipping or scrollbars");
+  assert.ok(Math.abs(landscape.width / landscape.height - 480 / 640) < 0.01);
 });
