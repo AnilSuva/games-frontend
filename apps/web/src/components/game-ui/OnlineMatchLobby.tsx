@@ -111,6 +111,17 @@ export function OnlineMatchLobby({
     }
   };
 
+  const handleReturnToModesClick = () => {
+    soundManager.play("buttonClick");
+    setTab("choose");
+    setRoomCodeInput("");
+    setCopied(false);
+    if (room) {
+      onLeaveRoom();
+    }
+    onReturnToModes();
+  };
+
   const handleJoinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCodeInput.trim().length >= 3 && !isJoining && !isConnecting) {
@@ -163,16 +174,25 @@ export function OnlineMatchLobby({
         </div>
 
         {/* Cancel / Leave Action */}
-        <button
-          type="button"
-          onClick={() => {
-            soundManager.play("buttonClick");
-            onLeaveRoom();
-          }}
-          className="w-full min-h-[36px] py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors flex items-center justify-center cursor-pointer"
-        >
-          Cancel Room
-        </button>
+        <div className="w-full space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.play("buttonClick");
+              onLeaveRoom();
+            }}
+            className="w-full min-h-[36px] py-1.5 text-xs text-[#e0530a] sm:hover:text-[#c2410c] active:text-[#9a3412] font-semibold transition-colors flex items-center justify-center cursor-pointer"
+          >
+            Cancel Room
+          </button>
+          <button
+            type="button"
+            onClick={handleReturnToModesClick}
+            className="w-full min-h-[32px] py-1 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors flex items-center justify-center cursor-pointer"
+          >
+            ← Back to Modes
+          </button>
+        </div>
       </div>
     );
   }
@@ -247,17 +267,28 @@ export function OnlineMatchLobby({
         </form>
 
         {/* Back Navigation */}
-        <button
-          type="button"
-          onClick={() => {
-            soundManager.play("buttonClick");
-            setTab("choose");
-          }}
-          disabled={isJoining}
-          className="w-full min-h-[36px] py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors flex items-center justify-center cursor-pointer disabled:text-[#9c978e]"
-        >
-          ← Back
-        </button>
+        <div className="w-full flex items-center justify-between text-xs pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.play("buttonClick");
+              setTab("choose");
+              setRoomCodeInput("");
+            }}
+            disabled={isJoining}
+            className="py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer disabled:text-[#9c978e]"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={handleReturnToModesClick}
+            disabled={isJoining}
+            className="py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors cursor-pointer disabled:text-[#9c978e]"
+          >
+            Back to Modes
+          </button>
+        </div>
       </div>
     );
   }
@@ -326,10 +357,7 @@ export function OnlineMatchLobby({
       {/* Back to Modes Navigation */}
       <button
         type="button"
-        onClick={() => {
-          soundManager.play("buttonClick");
-          onReturnToModes();
-        }}
+        onClick={handleReturnToModesClick}
         disabled={isCreating}
         className="w-full min-h-[36px] py-1.5 text-xs text-[#6b665f] sm:hover:text-[#1c1917] active:text-[#1c1917] transition-colors flex items-center justify-center cursor-pointer disabled:text-[#9c978e]"
       >

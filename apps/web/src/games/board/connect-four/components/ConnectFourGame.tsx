@@ -35,35 +35,32 @@ interface ActiveDrop {
 }
 
 const CONNECT_FOUR_MODES: GameModeOption[] = [
-  { id: "1v1", label: "1v1", description: "Local 2-Player" },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
-      title: "Connect Four",
-      subtitle: "Bot Difficulty",
+      title: "Select Difficulty",
+      subtitle: "Bot reaction speed and strategy",
       values: ["easy", "medium", "hard"],
       defaultValue: "medium",
-      sliderLabel: "Bot Difficulty",
       startLabel: "Start Match",
     },
   },
   {
     id: "online",
     label: "Online",
-    description: "Play with a Friend",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue
     </span>
@@ -560,21 +557,24 @@ export default function ConnectFourGame({
   // ── Mode selection overlay ──────────────────────────────────────────────────
   if (inModeSelection) {
     return (
-      <GameModeSelector
-        gameTitle="Connect Four"
-        modes={CONNECT_FOUR_MODES}
-        onSelectMode={handleSelectMode}
-        onSelectConfiguredMode={handleSelectConfiguredMode}
-        onScreenChange={(screen) =>
-          onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
-        }
-        footer={PLAYER_COLOR_FOOTER}
-      />
+      <div className="relative flex flex-col items-center justify-center w-full min-h-[500px] p-3 sm:p-4 select-none">
+        <GameModeSelector
+          gameTitle="Connect Four"
+          modes={CONNECT_FOUR_MODES}
+          onSelectMode={handleSelectMode}
+          onSelectConfiguredMode={handleSelectConfiguredMode}
+          onScreenChange={(screen) =>
+            onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
+          }
+          footer={PLAYER_COLOR_FOOTER}
+        />
+      </div>
     );
   }
 
   // ── Online Lobby (Waiting / Join / Create) ──────────────────────────────────
   if (
+    !inModeSelection &&
     sessionConfig.mode === "online" &&
     online.connectionState !== "in_game" &&
     online.connectionState !== "game_over"

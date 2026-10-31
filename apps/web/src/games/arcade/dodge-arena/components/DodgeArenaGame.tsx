@@ -15,15 +15,10 @@ import { computeArenaDimensions, type LayoutMetrics } from "../logic/layout";
 import type { BotDifficulty, DodgePlayerColor, GameMode } from "../logic/types";
 
 const DODGE_ARENA_MODES: GameModeOption[] = [
-  {
-    id: "1v1",
-    label: "Local 1v1",
-    description: "Shared screen survival duel (WASD & Arrows / Split-Touch / Mouse)",
-  },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "vs Bot",
-    description: "Challenge AI computer with intelligent hazard evasion",
+    label: "You vs Bot",
     config: {
       title: "Select Difficulty",
       subtitle: "Bot reaction speed and evasion intelligence",
@@ -32,12 +27,22 @@ const DODGE_ARENA_MODES: GameModeOption[] = [
       startLabel: "Enter Arena",
     },
   },
-  {
-    id: "online",
-    label: "Online 1v1",
-    description: "Real-time multiplayer duel with server synchronization",
-  },
+  { id: "online", label: "Multiplayer" },
 ];
+
+const PLAYER_COLOR_FOOTER = (
+  <div className="flex items-center gap-4 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
+      <span className="w-2.5 h-2.5 rounded-full bg-[#f97316]" />
+      Orange (P1)
+    </span>
+    <span className="text-[#9c978e]">•</span>
+    <span className="flex items-center gap-1.5 font-medium">
+      <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
+      Blue (P2)
+    </span>
+  </div>
+);
 
 function HeartIcon({ filled, color }: { filled: boolean; color: "orange" | "blue" }) {
   const fillColor = color === "orange" ? "#f97316" : "#3b82f6";
@@ -48,14 +53,14 @@ function HeartIcon({ filled, color }: { filled: boolean; color: "orange" | "blue
 
   return (
     <svg
-      className={`w-3.5 h-3.5 transition-all duration-300 ${
+      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-all duration-300 ${
         filled ? "scale-105" : "opacity-25 scale-90"
       }`}
       style={{ filter: filled ? glow : "none" }}
       viewBox="0 0 24 24"
       fill={filled ? fillColor : "none"}
-      stroke={filled ? fillColor : "#64748b"}
-      strokeWidth={2}
+      stroke={filled ? fillColor : "#475569"}
+      strokeWidth={filled ? 1.5 : 2}
     >
       <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     </svg>
@@ -253,6 +258,7 @@ export default function DodgeArenaGame({
       phaserGameRef.current = null;
     }
     sceneRef.current = null;
+    setSelectedMode("1v1");
     setInModeSelection(true);
     setIsPopupDismissed(false);
     setGameOverResult(null);
@@ -313,7 +319,7 @@ export default function DodgeArenaGame({
     (online.connectionState === "in_game" || online.connectionState === "game_over") &&
     Boolean(online.gameState);
 
-  const isOnlineLobby = selectedMode === "online" && !isInOnlineMatch;
+  const isOnlineLobby = !inModeSelection && selectedMode === "online" && !isInOnlineMatch;
 
   useEffect(() => {
     if (inModeSelection || isOnlineLobby) return;
@@ -582,9 +588,9 @@ export default function DodgeArenaGame({
       }
     >
       {/* Blue Player Lives (Guest / Top) */}
-      <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.9)]" />
-        <span className="text-[11px] font-bold text-blue-300 mr-0.5">{bluePlayerLabel}</span>
+      <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-lg">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.95)]" />
+        <span className="text-[11px] sm:text-xs font-bold text-blue-300 mr-0.5">{bluePlayerLabel}</span>
         <div className="flex items-center gap-1">
           {[1, 2, 3].map((num) => (
             <HeartIcon key={num} filled={lives.blue >= num} color="blue" />
@@ -593,26 +599,26 @@ export default function DodgeArenaGame({
       </div>
 
       {/* Match Clock & Wave Badge */}
-      <div className="flex flex-col items-center bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1 shadow-md">
-        <span className="text-[10px] font-black tracking-wider text-amber-400 uppercase font-mono">
+      <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 sm:px-3.5 py-1 shadow-lg">
+        <span className="text-[10px] font-black tracking-widest text-amber-400 uppercase font-mono">
           Wave {currentWave}
         </span>
-        <span className="text-xs font-mono font-bold text-slate-200">
+        <span className="text-xs sm:text-sm font-mono font-bold text-slate-100">
           {formatTime(matchSeconds)}
         </span>
       </div>
 
       {/* Orange Player Lives (Host / Bottom) */}
-      <div className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-md">
+      <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-lg">
         <div className="flex items-center gap-1">
           {[3, 2, 1].map((num) => (
             <HeartIcon key={num} filled={lives.orange >= num} color="orange" />
           ))}
         </div>
-        <span className="text-[11px] font-bold text-orange-300 ml-0.5">
+        <span className="text-[11px] sm:text-xs font-bold text-orange-300 ml-0.5">
           {orangePlayerLabel}
         </span>
-        <span className="w-2.5 h-2.5 rounded-full bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.9)]" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.95)]" />
       </div>
     </div>
   );
@@ -629,14 +635,15 @@ export default function DodgeArenaGame({
       <button
         type="button"
         onClick={handleBackToModeSelect}
-        className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] sm:text-[11px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
+        className="pointer-events-auto px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[11px] sm:text-xs font-semibold text-slate-200 hover:text-white shadow-sm transition active:scale-95 cursor-pointer backdrop-blur-md flex items-center gap-1"
         aria-label="Change Mode"
       >
-        ← Modes
+        <span>←</span>
+        <span>Modes</span>
       </button>
 
       {!isOverlay && (
-        <span className="text-[10px] text-slate-400 font-medium px-2 text-center">
+        <span className="text-[11px] text-slate-400 font-medium px-2 text-center">
           {selectedMode === "1v1"
             ? "Split-Touch: Blue (Top) • Orange (Bottom)"
             : "Touch & Drag to Dodge"}
@@ -647,10 +654,11 @@ export default function DodgeArenaGame({
         <button
           type="button"
           onClick={handleRestart}
-          className="pointer-events-auto px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[10px] sm:text-[11px] font-semibold text-slate-300 hover:text-white shadow-xs transition active:scale-95 cursor-pointer backdrop-blur-md"
+          className="pointer-events-auto px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 border border-slate-600/80 text-[11px] sm:text-xs font-semibold text-slate-200 hover:text-white shadow-sm transition active:scale-95 cursor-pointer backdrop-blur-md flex items-center gap-1"
           aria-label="Reset Match"
         >
-          Reset
+          <span>↺</span>
+          <span>Reset</span>
         </button>
       )}
     </div>
@@ -661,7 +669,7 @@ export default function DodgeArenaGame({
       ref={rootContainerRef}
       className={`relative w-full h-full flex flex-col items-center select-none overflow-hidden bg-[#070a14] touch-none ${
         inModeSelection || isOnlineLobby
-          ? "justify-center p-4"
+          ? "justify-center p-4 sm:p-6"
           : layoutMetrics.isMobile
           ? "p-0 justify-between"
           : "p-2 sm:p-4 justify-center"
@@ -669,19 +677,20 @@ export default function DodgeArenaGame({
     >
       {/* 1. Mode Selection Screen */}
       {inModeSelection && (
-        <div className="w-full max-w-sm px-4 py-6 z-20">
+        <div className="w-full flex items-center justify-center p-3 sm:p-4 z-20">
           <GameModeSelector
             gameTitle="Dodge Arena"
             modes={DODGE_ARENA_MODES}
             onSelectMode={handleSelectMode}
             onSelectConfiguredMode={handleSelectConfiguredMode}
+            footer={PLAYER_COLOR_FOOTER}
           />
         </div>
       )}
 
       {/* 2. Online Lobby Screen */}
-      {isOnlineLobby && (
-        <div className="w-full max-w-sm px-4 py-6 z-20">
+      {!inModeSelection && isOnlineLobby && (
+        <div className="w-full max-w-sm sm:max-w-md md:max-w-lg mx-auto px-4 py-6 z-20">
           <OnlineMatchLobby
             gameTitle="Dodge Arena"
             connectionState={online.connectionState}
@@ -846,6 +855,14 @@ export default function DodgeArenaGame({
                   resultText={
                     gameOverResult === "draw"
                       ? "Draw Game"
+                      : selectedMode === "bot"
+                      ? gameOverResult === "orange"
+                        ? "You Won!"
+                        : "Bot Won!"
+                      : selectedMode === "online"
+                      ? gameOverResult === online.myRole
+                        ? "You Won!"
+                        : "Opponent Won!"
                       : gameOverResult === "orange"
                       ? "Orange Won!"
                       : "Blue Won!"

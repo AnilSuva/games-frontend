@@ -15,13 +15,11 @@ import type { BotDifficulty } from "../config/constants";
 const LIGHT_FINGERS_MODES: GameModeOption[] = [
   {
     id: "1v1",
-    label: "1v1",
-    description: "Local 2-Player (Same Screen Duel)",
+    label: "Local 1v1",
   },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
       title: "Select Difficulty",
       subtitle: "Bot reaction speed and max simultaneous fingers",
@@ -33,13 +31,13 @@ const LIGHT_FINGERS_MODES: GameModeOption[] = [
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center justify-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center justify-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue Vault (Top)
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange Vault (Bottom)
     </span>

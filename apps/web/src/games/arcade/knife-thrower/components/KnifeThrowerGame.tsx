@@ -11,13 +11,11 @@ import type { KnifeThrowerInventory, KnifeThrowerScore, PlayerRole } from "../ga
 const KNIFE_THROWER_MODES: GameModeOption[] = [
   {
     id: "1v1",
-    label: "1v1",
-    description: "Local 2-Player (Split Screen Duel)",
+    label: "Local 1v1",
   },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
       title: "Select Difficulty",
       subtitle: "Bot reaction speed and precision",
@@ -29,13 +27,13 @@ const KNIFE_THROWER_MODES: GameModeOption[] = [
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center justify-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center justify-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue (Top)
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange (Bottom)
     </span>
@@ -279,7 +277,7 @@ export default function KnifeThrowerGame({
   }, [inModeSelection, selectedMode, difficulty]);
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#f7f6f2] p-2 sm:p-3">
+    <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#f7f6f2] p-3 sm:p-4">
       {/* 1. Mode Selection Screen */}
       {inModeSelection && (
         <GameModeSelector

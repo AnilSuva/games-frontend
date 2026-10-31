@@ -12,14 +12,13 @@ import { useOnlineBrickBlast } from "@/platform/multiplayer/useOnlineBrickBlast"
 import { OnlineMatchLobby } from "@/components/game-ui/OnlineMatchLobby";
 
 const BRICK_BLAST_MODES: GameModeOption[] = [
-  { id: "1v1", label: "1v1", description: "Local 2-Player" },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
-      title: "Brick Blast Bot",
-      subtitle: "Choose your opponent difficulty",
+      title: "Select Difficulty",
+      subtitle: "Bot reaction speed and paddle tracking",
       values: ["easy", "medium", "hard"],
       defaultValue: "medium",
       startLabel: "Start Match",
@@ -28,18 +27,17 @@ const BRICK_BLAST_MODES: GameModeOption[] = [
   {
     id: "online",
     label: "Online",
-    description: "Play with a Friend",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue (Top)
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange (Bottom)
     </span>
@@ -281,7 +279,7 @@ export default function BrickBlastGame({
     (online.connectionState === "in_game" || online.connectionState === "game_over") &&
     Boolean(online.gameState);
 
-  const isOnlineLobby = selectedMode === "online" && !isInOnlineMatch;
+  const isOnlineLobby = !inModeSelection && selectedMode === "online" && !isInOnlineMatch;
 
   useEffect(() => {
     if (inModeSelection || isOnlineLobby) return;
@@ -441,21 +439,23 @@ export default function BrickBlastGame({
   // Mode Selection Overlay
   if (inModeSelection) {
     return (
-      <GameModeSelector
-        gameTitle="Brick Blast"
-        modes={BRICK_BLAST_MODES}
-        onSelectMode={handleSelectMode}
-        onSelectConfiguredMode={handleSelectConfiguredMode}
-        onScreenChange={(screen) =>
-          onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
-        }
-        footer={PLAYER_COLOR_FOOTER}
-      />
+      <div className="relative flex flex-col items-center justify-center w-full min-h-[500px] p-3 sm:p-4 select-none">
+        <GameModeSelector
+          gameTitle="Brick Blast"
+          modes={BRICK_BLAST_MODES}
+          onSelectMode={handleSelectMode}
+          onSelectConfiguredMode={handleSelectConfiguredMode}
+          onScreenChange={(screen) =>
+            onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
+          }
+          footer={PLAYER_COLOR_FOOTER}
+        />
+      </div>
     );
   }
 
   // Online Match Lobby
-  if (isOnlineLobby) {
+  if (!inModeSelection && isOnlineLobby) {
     return (
       <OnlineMatchLobby
         gameTitle="Brick Blast"

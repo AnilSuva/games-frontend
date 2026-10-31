@@ -20,13 +20,11 @@ import type {
 const STAR_CATCHER_MODES: GameModeOption[] = [
   {
     id: "1v1",
-    label: "1v1",
-    description: "Local 2-Player (Split-Screen Space Duel)",
+    label: "Local 1v1",
   },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
       title: "Select Difficulty",
       subtitle: "Bot steering precision and hazard avoidance",
@@ -37,20 +35,19 @@ const STAR_CATCHER_MODES: GameModeOption[] = [
   },
   {
     id: "online",
-    label: "Online 1v1",
-    description: "Live 2-Player Match (Room Code & Link)",
+    label: "Online",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center justify-center gap-4 text-[11px] text-[#9c978e]">
+  <div className="flex items-center justify-center gap-4 text-xs text-[#6b665f]">
     <span className="flex items-center gap-1.5 font-medium">
-      <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shadow-[0_0_6px_rgba(59,130,246,0.8)]" />
+      <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
       Blue Ship (Top)
     </span>
-    <span className="text-white/30">•</span>
+    <span className="text-[#9c978e]">•</span>
     <span className="flex items-center gap-1.5 font-medium">
-      <span className="w-2.5 h-2.5 rounded-full bg-[#f97316] shadow-[0_0_6px_rgba(249,115,22,0.8)]" />
+      <span className="w-2.5 h-2.5 rounded-full bg-[#f97316]" />
       Orange Ship (Bottom)
     </span>
   </div>
@@ -293,6 +290,7 @@ export default function StarCatcherGame({
       phaserGameRef.current = null;
     }
     sceneRef.current = null;
+    setSelectedMode("1v1");
     setInModeSelection(true);
     setIsPopupDismissed(false);
     setGameOverResult(null);
@@ -423,7 +421,7 @@ export default function StarCatcherGame({
     (online.connectionState === "in_game" || online.connectionState === "game_over") &&
     Boolean(online.gameState);
 
-  const isOnlineLobby = selectedMode === "online" && !isInOnlineMatch;
+  const isOnlineLobby = !inModeSelection && selectedMode === "online" && !isInOnlineMatch;
 
   // Phaser Initialization when match is ready
   useEffect(() => {
@@ -657,7 +655,7 @@ export default function StarCatcherGame({
   // 1. Mode Selection Screen
   if (inModeSelection) {
     return (
-      <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#07090e] p-2 sm:p-4">
+      <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#07090e] p-3 sm:p-4">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full bg-blue-600/10 blur-[100px]" />
           <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full bg-orange-600/10 blur-[100px]" />
@@ -679,7 +677,7 @@ export default function StarCatcherGame({
   }
 
   // 2. Online Lobby Screen
-  if (isOnlineLobby) {
+  if (!inModeSelection && isOnlineLobby) {
     return (
       <div className="relative w-full h-full flex flex-col items-center justify-center p-4 bg-[#07090e]">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">

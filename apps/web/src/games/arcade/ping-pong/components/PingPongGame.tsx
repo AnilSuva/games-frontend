@@ -13,14 +13,13 @@ import { OnlineMatchLobby } from "@/components/game-ui/OnlineMatchLobby";
 import type { BallSyncPayload, PingPongScore } from "../game/types";
 
 const PING_PONG_MODES: GameModeOption[] = [
-  { id: "1v1", label: "1v1", description: "Local 2-Player (Split Touch)" },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
-      title: "Ping Pong Bot",
-      subtitle: "Choose your opponent difficulty",
+      title: "Select Difficulty",
+      subtitle: "Bot reaction speed and spin anticipation",
       values: ["easy", "medium", "hard"],
       defaultValue: "medium",
       startLabel: "Start Match",
@@ -29,18 +28,17 @@ const PING_PONG_MODES: GameModeOption[] = [
   {
     id: "online",
     label: "Online",
-    description: "Play with a Friend",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue (Top)
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange (Bottom)
     </span>
@@ -261,7 +259,7 @@ export default function PingPongGame({
     (online.connectionState === "in_game" || online.connectionState === "game_over") &&
     Boolean(online.gameState);
 
-  const isOnlineLobby = selectedMode === "online" && !isInOnlineMatch;
+  const isOnlineLobby = !inModeSelection && selectedMode === "online" && !isInOnlineMatch;
 
   useEffect(() => {
     // STRICT LIFECYCLE: Do not initialize Phaser if still picking mode or waiting in lobby
@@ -428,21 +426,23 @@ export default function PingPongGame({
   // 1. Mode Selection Screen (Phaser Canvas strictly NOT mounted)
   if (inModeSelection) {
     return (
-      <GameModeSelector
-        gameTitle="Ping Pong"
-        modes={PING_PONG_MODES}
-        footer={PLAYER_COLOR_FOOTER}
-        onSelectMode={handleSelectMode}
-        onSelectConfiguredMode={handleSelectConfiguredMode}
-        onScreenChange={(screen) =>
-          onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
-        }
-      />
+      <div className="relative flex flex-col items-center justify-center w-full min-h-[500px] p-3 sm:p-4 select-none">
+        <GameModeSelector
+          gameTitle="Ping Pong"
+          modes={PING_PONG_MODES}
+          footer={PLAYER_COLOR_FOOTER}
+          onSelectMode={handleSelectMode}
+          onSelectConfiguredMode={handleSelectConfiguredMode}
+          onScreenChange={(screen) =>
+            onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
+          }
+        />
+      </div>
     );
   }
 
   // 2. Online Lobby Screen (Waiting for opponent)
-  if (isOnlineLobby) {
+  if (!inModeSelection && isOnlineLobby) {
     return (
       <div className="relative w-full h-full flex flex-col items-center justify-center p-4">
         <OnlineMatchLobby

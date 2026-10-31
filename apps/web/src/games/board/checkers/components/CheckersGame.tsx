@@ -41,36 +41,33 @@ interface SessionConfig {
 }
 
 const CHECKERS_MODES: GameModeOption[] = [
-  { id: "1v1", label: "1v1", description: "Local 2-Player" },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
-      title: "Checkers",
-      subtitle: "Bot Difficulty",
+      title: "Select Difficulty",
+      subtitle: "Bot search depth and heuristics",
       values: ["easy", "medium", "hard"],
       defaultValue: "medium",
-      sliderLabel: "Bot Difficulty",
       startLabel: "Start Match",
     },
   },
   {
     id: "online",
     label: "Online",
-    description: "Play with a Friend",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center gap-3 text-[11px] text-[#9c978e]">
+  <div className="flex items-center gap-3 text-xs text-[#6b665f]">
     <span className="flex items-center gap-1.5 font-medium">
-      <span className="w-2.5 h-2.5 rounded-full bg-[#e0530a] shadow-sm" />
+      <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
       Orange (Starts)
     </span>
     <span>vs</span>
     <span className="flex items-center gap-1.5 font-medium">
-      <span className="w-2.5 h-2.5 rounded-full bg-[#2563eb] shadow-sm" />
+      <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
       Blue
     </span>
   </div>
@@ -509,21 +506,24 @@ export default function CheckersGame({
   // Mode selection screen: board and HUD remain unrendered until mode is chosen
   if (inModeSelection) {
     return (
-      <GameModeSelector
-        gameTitle="Checkers"
-        modes={CHECKERS_MODES}
-        footer={PLAYER_COLOR_FOOTER}
-        onSelectMode={handleSelectSimpleMode}
-        onSelectConfiguredMode={handleSelectConfiguredMode}
-        onScreenChange={(screen) =>
-          onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
-        }
-      />
+      <div className="relative flex flex-col items-center justify-center w-full min-h-[500px] p-3 sm:p-4 select-none">
+        <GameModeSelector
+          gameTitle="Checkers"
+          modes={CHECKERS_MODES}
+          footer={PLAYER_COLOR_FOOTER}
+          onSelectMode={handleSelectSimpleMode}
+          onSelectConfiguredMode={handleSelectConfiguredMode}
+          onScreenChange={(screen) =>
+            onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
+          }
+        />
+      </div>
     );
   }
 
   // Online match lobby screen when not yet in-game
   if (
+    !inModeSelection &&
     isOnlineMode &&
     (!online.gameState ||
       (online.connectionState !== "in_game" &&

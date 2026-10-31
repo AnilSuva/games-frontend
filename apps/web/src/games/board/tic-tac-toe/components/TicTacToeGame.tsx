@@ -22,37 +22,34 @@ interface SessionConfig {
 // ─── Mode definitions for the shared GameModeSelector ────────────────────────
 
 const TIC_TAC_TOE_MODES: GameModeOption[] = [
-  { id: "1v1", label: "1v1", description: "Local 2-Player" },
+  { id: "1v1", label: "Local 1v1" },
   {
     id: "bot",
-    label: "Bot",
-    description: "vs AI Computer",
+    label: "You vs Bot",
     config: {
-      title: "Tic-Tac-Toe",
-      subtitle: "Bot Difficulty",
+      title: "Select Difficulty",
+      subtitle: "Bot reaction speed and strategy",
       values: ["easy", "medium", "hard"],
       defaultValue: "medium",
-      sliderLabel: "Bot Difficulty",
       startLabel: "Start Match",
     },
   },
   {
     id: "online",
     label: "Online",
-    description: "Play with a Friend",
   },
 ];
 
 const PLAYER_COLOR_FOOTER = (
-  <div className="flex items-center gap-3 text-[11px] text-[#9c978e]">
-    <span className="flex items-center gap-1">
+  <div className="flex items-center gap-3 text-xs text-[#6b665f]">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#e0530a]" />
-      Orange
+      Orange (X)
     </span>
     <span>vs</span>
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5 font-medium">
       <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
-      Blue
+      Blue (O)
     </span>
   </div>
 );
@@ -220,12 +217,16 @@ export default function TicTacToeGame({
 
   const handleReturnToModes = useCallback(() => {
     botAbortControllerRef.current?.abort();
-    online.disconnect();
+    if (sessionConfig.mode === "online") {
+      online.leaveRoom();
+    }
+    setSessionConfig({ mode: "1v1", difficulty: "medium" });
     setInModeSelection(true);
     setShowResultPopup(false);
     setIsPopupDismissed(false);
     onLifecycleChange?.("pre-game");
-  }, [onLifecycleChange, online]);
+    onTurnChange?.(null);
+  }, [onLifecycleChange, onTurnChange, online, sessionConfig.mode]);
 
   const handleHomeExit = useCallback(() => {
     online.exitMatch();
@@ -379,22 +380,24 @@ export default function TicTacToeGame({
   // If in initial mode selection overlay, render clean selection surface
   if (inModeSelection) {
     return (
-      <GameModeSelector
-        gameTitle="Tic-Tac-Toe"
-        modes={TIC_TAC_TOE_MODES}
-        onSelectMode={handleSelectMode}
-        onSelectConfiguredMode={handleSelectConfiguredMode}
-        onScreenChange={(screen) =>
-          onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
-        }
-        footer={PLAYER_COLOR_FOOTER}
-      />
+      <div className="relative flex flex-col items-center justify-center w-full min-h-[500px] p-3 sm:p-4 select-none">
+        <GameModeSelector
+          gameTitle="Tic-Tac-Toe"
+          modes={TIC_TAC_TOE_MODES}
+          onSelectMode={handleSelectMode}
+          onSelectConfiguredMode={handleSelectConfiguredMode}
+          onScreenChange={(screen) =>
+            onLifecycleChange?.(screen === "config" ? "configuration" : "pre-game")
+          }
+          footer={PLAYER_COLOR_FOOTER}
+        />
+      </div>
     );
   }
 
   // ─── ONLINE MODE LOBBY / BOARD RENDERING ───────────────────────────────────
 
-  if (sessionConfig.mode === "online") {
+  if (!inModeSelection && sessionConfig.mode === "online") {
     const isInOnlineMatch =
       (online.connectionState === "in_game" || online.connectionState === "game_over") &&
       Boolean(online.gameState);
