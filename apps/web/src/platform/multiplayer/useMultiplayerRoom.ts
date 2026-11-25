@@ -25,6 +25,7 @@ const PING_INTERVAL_MS = 20_000;
 export interface UseMultiplayerRoomOptions {
   gameId: string;
   defaultMaxPlayers?: number;
+  displayName?: string;
   onMessage?: (envelope: ServerEnvelope) => void;
   onRoomUpdated?: (room: RoomDto, reason?: string) => void;
 }
@@ -32,9 +33,14 @@ export interface UseMultiplayerRoomOptions {
 export function useMultiplayerRoom({
   gameId,
   defaultMaxPlayers = 2,
+  displayName,
   onMessage,
   onRoomUpdated,
 }: UseMultiplayerRoomOptions) {
+  const displayNameRef = useRef<string | undefined>(displayName);
+  useEffect(() => {
+    displayNameRef.current = displayName;
+  }, [displayName]);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
@@ -224,7 +230,9 @@ export function useMultiplayerRoom({
           });
           onRoomUpdatedRef.current?.(payload.room, "player_joined");
 
-          if (payload.room.players.length >= 2) {
+          if (!payload.room.manualStart && payload.room.players.length >= 2) {
+            setConnectionState("in_game");
+          } else if (payload.room.status === "in-progress") {
             setConnectionState("in_game");
           } else {
             setConnectionState("waiting_for_opponent");
@@ -254,7 +262,7 @@ export function useMultiplayerRoom({
 
           if (
             payload.room.status === "in-progress" ||
-            payload.room.players.length >= 2
+            (!payload.room.manualStart && payload.room.players.length >= 2)
           ) {
             setConnectionState((prev) =>
               prev !== "reconnecting" && prev !== "game_over" ? "in_game" : prev
@@ -381,7 +389,7 @@ export function useMultiplayerRoom({
       const existingToken = getStoredSessionToken();
       sendMessage("session.identify", {
         sessionToken: existingToken ?? undefined,
-        displayName: "Player",
+        displayName: displayNameRef.current?.trim() || "Player",
       });
     };
 
@@ -506,7 +514,11 @@ export function useMultiplayerRoom({
 
   // Create room
   const createRoom = useCallback(
-    (options?: { maxPlayers?: number }) => {
+    (options?: {
+      maxPlayers?: number;
+      displayName?: string;
+      settings?: Record<string, unknown>;
+    }) => {
       setErrorMessage(null);
       const doCreate = () => {
         setConnectionState("creating_room");
@@ -514,6 +526,8 @@ export function useMultiplayerRoom({
         const sentId = sendMessage("room.create", {
           gameId,
           maxPlayers: options?.maxPlayers ?? defaultMaxPlayers,
+          displayName: options?.displayName ?? displayNameRef.current,
+          settings: options?.settings,
         });
         if (!sentId) {
           pendingActionRef.current = doCreate;
@@ -545,7 +559,7 @@ export function useMultiplayerRoom({
 
   // Join room
   const joinRoom = useCallback(
-    (roomCode: string) => {
+    (roomCode: string, options?: { displayName?: string }) => {
       const cleanCode = roomCode.trim().toUpperCase();
       if (cleanCode.length === 0) {
         setErrorMessage("Please enter a room code");
@@ -558,6 +572,7 @@ export function useMultiplayerRoom({
         startRoomTimeout("join");
         const sentId = sendMessage("room.join", {
           roomCode: cleanCode,
+          displayName: options?.displayName ?? displayNameRef.current,
         });
         if (!sentId) {
           pendingActionRef.current = doJoin;
@@ -579,6 +594,28 @@ export function useMultiplayerRoom({
     },
     [connectionState, connect, sendMessage, startRoomTimeout]
   );
+
+  // Update waiting room settings (host-only)
+  const updateRoomSettings = useCallback(
+    (settings: Record<string, unknown>) => {
+      const targetRoomId = roomRef.current?.roomId;
+      if (!targetRoomId) return null;
+      return sendMessage("update_room_settings", {
+        roomId: targetRoomId,
+        settings,
+      });
+    },
+    [sendMessage]
+  );
+
+  // Start match manually (host-only)
+  const startGame = useCallback(() => {
+    const targetRoomId = roomRef.current?.roomId;
+    if (!targetRoomId) return null;
+    return sendMessage("start_game", {
+      roomId: targetRoomId,
+    });
+  }, [sendMessage]);
 
   // Leave room while keeping connection active
   const leaveRoom = useCallback(() => {
@@ -658,6 +695,8 @@ export function useMultiplayerRoom({
     createRoom,
     joinRoom,
     leaveRoom,
+    updateRoomSettings,
+    startGame,
     sendMessage,
     setConnectionState,
     setErrorMessage,

@@ -46,6 +46,9 @@ export const CARTRIDGE_MAP: Record<
   "wall-maze": React.lazy(
     () => import("@/games/board/wall-maze/components/WallMazeGame")
   ),
+  "uno-no-mercy": React.lazy(
+    () => import("@/games/board/uno-no-mercy/components/UnoNoMercyGame")
+  ),
   "typing-race": React.lazy(
     () => import("@/games/arcade/typing-race/components/TypingRaceGame")
   ),

@@ -11,6 +11,7 @@ import { DodgeArenaAdapter } from "./dodge-arena/DodgeArenaAdapter.js";
 import { MiniGolfAdapter } from "./mini-golf-duel/MiniGolfAdapter.js";
 import { ChainReactionAdapter } from "./chain-reaction/ChainReactionAdapter.js";
 import { WallMazeAdapter } from "./wall-maze/WallMazeAdapter.js";
+import { UnoNoMercyAdapter } from "./uno-no-mercy/UnoNoMercyAdapter.js";
 
 export * from "./GameAdapter.js";
 export * from "./tic-tac-toe/index.js";
@@ -91,6 +92,22 @@ export type {
   WallOrientation as WallMazeOrientation,
 } from "./wall-maze/types.js";
 
+export { UnoNoMercyAdapter } from "./uno-no-mercy/UnoNoMercyAdapter.js";
+export type {
+  UnoAction,
+  UnoCard,
+  UnoCardColor,
+  UnoCardKind,
+  UnoColor,
+  UnoGameState,
+  UnoPhase,
+  UnoPlayerState,
+  UnoPublicPlayerInfo,
+  UnoPublicPlayerView,
+  UnoResultReason,
+  UnoSettings,
+} from "./uno-no-mercy/types.js";
+
 export function createDefaultGameRegistry(): GameAdapterRegistry {
   const registry = new GameAdapterRegistry();
   registry.register(new TicTacToeAdapter());
@@ -105,6 +122,7 @@ export function createDefaultGameRegistry(): GameAdapterRegistry {
   registry.register(new MiniGolfAdapter());
   registry.register(new ChainReactionAdapter());
   registry.register(new WallMazeAdapter());
+  registry.register(new UnoNoMercyAdapter());
   return registry;
 }
 

@@ -16,13 +16,19 @@ export interface RoomOptions {
   gameId: string;
   hostPlayerId: string;
   maxPlayers: number;
+  minPlayers?: number;
+  manualStart?: boolean;
+  settings?: Record<string, unknown>;
 }
 
 export class Room {
   public readonly id: string;
   public readonly code: string;
   public readonly gameId: string;
-  public readonly maxPlayers: number;
+  public readonly minPlayers: number;
+  public maxPlayers: number;
+  public readonly manualStart: boolean;
+  public settings: Record<string, unknown>;
   public hostPlayerId: string;
   public status: RoomStatus;
   public readonly players = new Map<string, RoomPlayer>();
@@ -36,7 +42,10 @@ export class Room {
     this.code = options.code.toUpperCase();
     this.gameId = options.gameId;
     this.hostPlayerId = options.hostPlayerId;
+    this.minPlayers = options.minPlayers ?? 2;
     this.maxPlayers = options.maxPlayers;
+    this.manualStart = options.manualStart ?? false;
+    this.settings = options.settings ? { ...options.settings } : {};
     this.status = "waiting";
     this.version = 1;
     this.createdAt = Date.now();
@@ -83,10 +92,10 @@ export class Room {
     if (deleted) {
       this.touch();
 
-      // If host left, elect new host if any connected players remain
+      // If host left, elect next oldest joined player (preferring connected)
       if (this.hostPlayerId === playerId && this.players.size > 0) {
-        const nextHost = Array.from(this.players.values()).find((p) => p.connected) ??
-          Array.from(this.players.values())[0];
+        const sorted = Array.from(this.players.values()).sort((a, b) => a.joinedAt - b.joinedAt);
+        const nextHost = sorted.find((p) => p.connected) ?? sorted[0];
         if (nextHost) {
           this.hostPlayerId = nextHost.playerId;
         }
@@ -142,7 +151,7 @@ export class Room {
     this.version++;
   }
 
-  public toDto(): RoomDto {
+  public toDto(overrideGameState?: unknown): RoomDto {
     const playersDto: RoomPlayerDto[] = Array.from(this.players.values())
       .sort((a, b) => a.seat - b.seat)
       .map((p) => ({
@@ -151,6 +160,7 @@ export class Room {
         displayName: p.displayName,
         connected: p.connected,
         joinedAt: p.joinedAt,
+        isHost: p.playerId === this.hostPlayerId,
       }));
 
     return {
@@ -161,9 +171,12 @@ export class Room {
       hostPlayerId: this.hostPlayerId,
       players: playersDto,
       maxPlayers: this.maxPlayers,
+      minPlayers: this.minPlayers,
+      manualStart: this.manualStart,
+      settings: Object.keys(this.settings).length > 0 ? { ...this.settings } : undefined,
       version: this.version,
       createdAt: this.createdAt,
-      gameState: this.gameState,
+      gameState: arguments.length > 0 ? overrideGameState : this.gameState,
     };
   }
 }

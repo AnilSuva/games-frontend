@@ -126,6 +126,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/board/wall-maze/components/WallMazeGame"),
   },
   {
+    id: "uno-no-mercy",
+    title: "UNO No Mercy",
+    shortDescription: "2–6 player online card battle with +10 stacks and the 25-card Mercy Rule.",
+    description:
+      "The most ruthless UNO ever made. Stack +2, +4, +6, and +10 penalties, swap hands with 7s, survive Wild Color Roulette, and stay under the Mercy Limit to win.",
+    category: "board",
+    engine: "react-dom",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "responsive",
+    iconName: "layers",
+    badgeText: "Online",
+    tags: ["Card", "Multiplayer", "2-6 Players", "Strategy"],
+    loader: () =>
+      import("@/games/board/uno-no-mercy/components/UnoNoMercyGame"),
+  },
+  {
     id: "chess",
     title: "Chess",
     shortDescription: "The timeless battle of kings, queens, and pawns.",

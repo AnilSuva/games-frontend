@@ -10,9 +10,15 @@ import type { GameStatePayload, RoomUpdatedPayload } from "../types/index.js";
 import { parseClientMessage } from "../validation/messages.js";
 import { ConnectionTracker, PlayerConnection } from "./connection.js";
 import { HeartbeatService } from "./heartbeat.js";
-import { broadcastToRoom, handleClientMessage } from "./protocol.js";
+import {
+  broadcastGameState,
+  broadcastToRoom,
+  getSafeRoomDto,
+  handleClientMessage,
+  scheduleRoomTurnTimer,
+} from "./protocol.js";
 
-import type { GameAdapterRegistry } from "../games/index.js";
+import { createDefaultGameRegistry, type GameAdapterRegistry } from "../games/index.js";
 
 export interface WebSocketServiceContext {
   connectionTracker: ConnectionTracker;
@@ -22,7 +28,8 @@ export interface WebSocketServiceContext {
 function notifyPlayerDisconnect(
   playerId: string,
   roomManager: RoomManager,
-  connectionTracker: ConnectionTracker
+  connectionTracker: ConnectionTracker,
+  gameRegistry: GameAdapterRegistry
 ): void {
   const disconnectResult = roomManager.handleDisconnect(playerId, (abandonedRoom) => {
     broadcastToRoom<RoomUpdatedPayload>(
@@ -31,28 +38,57 @@ function notifyPlayerDisconnect(
         version: PROTOCOL_VERSION,
         type: "room.updated",
         payload: {
-          room: abandonedRoom.toDto(),
+          room: getSafeRoomDto(abandonedRoom, gameRegistry),
           reason: "player_left",
         },
       },
       connectionTracker
     );
     if (abandonedRoom.gameState) {
-      broadcastToRoom<GameStatePayload>(
-        abandonedRoom,
+      broadcastGameState(abandonedRoom, connectionTracker, gameRegistry);
+    }
+  });
+
+  if (disconnectResult.removedImmediately) {
+    if (!disconnectResult.destroyed && disconnectResult.room) {
+      const room = disconnectResult.room;
+      if (disconnectResult.events && disconnectResult.events.length > 0) {
+        for (const ev of disconnectResult.events) {
+          broadcastToRoom(
+            room,
+            {
+              version: PROTOCOL_VERSION,
+              type: "game.event",
+              payload: ev,
+            },
+            connectionTracker
+          );
+        }
+      }
+
+      broadcastToRoom<RoomUpdatedPayload>(
+        room,
         {
           version: PROTOCOL_VERSION,
-          type: "game.state",
+          type: "room.updated",
           payload: {
-            roomId: abandonedRoom.id,
-            version: abandonedRoom.version,
-            gameState: abandonedRoom.gameState,
+            room: getSafeRoomDto(room, gameRegistry),
+            reason: "player_removed",
           },
         },
         connectionTracker
       );
+
+      if (room.gameState) {
+        broadcastGameState(room, connectionTracker, gameRegistry);
+      }
+
+      if (room.status === "in-progress") {
+        scheduleRoomTurnTimer(room, roomManager, connectionTracker, gameRegistry);
+      }
     }
-  });
+    return;
+  }
 
   if (disconnectResult.room) {
     broadcastToRoom<RoomUpdatedPayload>(
@@ -61,7 +97,7 @@ function notifyPlayerDisconnect(
         version: PROTOCOL_VERSION,
         type: "room.updated",
         payload: {
-          room: disconnectResult.room.toDto(),
+          room: getSafeRoomDto(disconnectResult.room, gameRegistry),
           reason: "player_disconnected",
         },
       },
@@ -70,20 +106,7 @@ function notifyPlayerDisconnect(
     );
 
     if (disconnectResult.room.gameState) {
-      broadcastToRoom<GameStatePayload>(
-        disconnectResult.room,
-        {
-          version: PROTOCOL_VERSION,
-          type: "game.state",
-          payload: {
-            roomId: disconnectResult.room.id,
-            version: disconnectResult.room.version,
-            gameState: disconnectResult.room.gameState,
-          },
-        },
-        connectionTracker,
-        playerId
-      );
+      broadcastGameState(disconnectResult.room, connectionTracker, gameRegistry, playerId);
     }
   }
 }
@@ -97,7 +120,8 @@ export async function registerWebSocket(
     gameRegistry?: GameAdapterRegistry;
   }
 ): Promise<WebSocketServiceContext> {
-  const { config, sessionStore, roomManager, gameRegistry } = options;
+  const { config, sessionStore, roomManager } = options;
+  const gameRegistry = options.gameRegistry ?? createDefaultGameRegistry();
   const connectionTracker = new ConnectionTracker();
 
   // Register fastify-websocket plugin with strict options
@@ -119,7 +143,7 @@ export async function registerWebSocket(
         const isCurrent =
           connectionTracker.getByPlayerId(playerId)?.connectionId === connectionId;
         if (isCurrent) {
-          notifyPlayerDisconnect(playerId, roomManager, connectionTracker);
+          notifyPlayerDisconnect(playerId, roomManager, connectionTracker, gameRegistry);
         }
       }
     }
@@ -232,7 +256,7 @@ export async function registerWebSocket(
         connectionTracker.remove(playerConn.connectionId);
 
         if (playerConn.playerId && isCurrent) {
-          notifyPlayerDisconnect(playerConn.playerId, roomManager, connectionTracker);
+          notifyPlayerDisconnect(playerConn.playerId, roomManager, connectionTracker, gameRegistry);
         }
       });
 

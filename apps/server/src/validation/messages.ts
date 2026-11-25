@@ -14,6 +14,8 @@ import type {
   RoomLeavePayload,
   RoomReconnectPayload,
   SessionIdentifyPayload,
+  StartGamePayload,
+  UpdateRoomSettingsPayload,
 } from "../types/index.js";
 import { isPayloadWithinLimit } from "./limits.js";
 
@@ -27,6 +29,16 @@ export const roomCreateSchema = z.object({
   gameId: z.string().trim().min(1).max(64),
   maxPlayers: z.number().int().min(2).max(8).optional(),
   displayName: z.string().trim().min(1).max(32).optional(),
+  settings: z.record(z.unknown()).optional(),
+});
+
+export const updateRoomSettingsSchema = z.object({
+  roomId: z.string().min(1).max(64).optional(),
+  settings: z.record(z.unknown()),
+});
+
+export const startGameSchema = z.object({
+  roomId: z.string().min(1).max(64).optional(),
 });
 
 export const roomJoinSchema = z.object({
@@ -84,6 +96,31 @@ export const gameMoveSchema = z
           col: z.number().int().min(0).max(7),
           orientation: z.enum(["h", "v"]),
         }),
+        z.object({
+          type: z.literal("PLAY_CARD"),
+          cardId: z.string().min(1).max(64),
+          chosenColor: z.enum(["red", "yellow", "green", "blue"]).optional(),
+        }),
+        z.object({ type: z.literal("DRAW_CARD") }),
+        z.object({ type: z.literal("PASS_TURN") }),
+        z.object({ type: z.literal("ACCEPT_DRAW_PENALTY") }),
+        z.object({
+          type: z.literal("CHOOSE_WILD_COLOR"),
+          color: z.enum(["red", "yellow", "green", "blue"]),
+        }),
+        z.object({
+          type: z.literal("CHOOSE_SWAP_TARGET"),
+          targetPlayerId: z.string().min(1).max(128),
+        }),
+        z.object({
+          type: z.literal("CHOOSE_ROULETTE_COLOR"),
+          color: z.enum(["red", "yellow", "green", "blue"]),
+        }),
+        z.object({ type: z.literal("CALL_UNO") }),
+        z.object({
+          type: z.literal("CATCH_UNO"),
+          targetPlayerId: z.string().min(1).max(128),
+        }),
       ])
       .optional(),
   })
@@ -135,6 +172,10 @@ const baseEnvelopeSchema = z.object({
     "room.join",
     "room.leave",
     "room.reconnect",
+    "room.update_settings",
+    "update_room_settings",
+    "room.start",
+    "start_game",
     "ping",
     "game.move",
     "game.rematch",
@@ -152,6 +193,10 @@ export type ValidatedClientMessage =
   | (ClientEnvelope<RoomJoinPayload> & { type: "room.join" })
   | (ClientEnvelope<RoomLeavePayload> & { type: "room.leave" })
   | (ClientEnvelope<RoomReconnectPayload> & { type: "room.reconnect" })
+  | (ClientEnvelope<UpdateRoomSettingsPayload> & {
+      type: "room.update_settings" | "update_room_settings";
+    })
+  | (ClientEnvelope<StartGamePayload> & { type: "room.start" | "start_game" })
   | (ClientEnvelope<ClientPingPayload> & { type: "ping" })
   | (ClientEnvelope<GameMovePayload> & { type: "game.move" })
   | (ClientEnvelope<GameRematchPayload> & { type: "game.rematch" })
@@ -343,6 +388,50 @@ export function parseClientMessage(
         message: {
           version: PROTOCOL_VERSION,
           type: "room.reconnect",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "room.update_settings":
+    case "update_room_settings": {
+      const res = updateRoomSettingsSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid update_room_settings payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: envelope.type,
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "room.start":
+    case "start_game": {
+      const res = startGameSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid start_game payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: envelope.type,
           requestId: envelope.requestId,
           payload: res.data,
         },

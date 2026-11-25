@@ -14,11 +14,35 @@ export interface ValidationOutcome {
   error?: string;
 }
 
+export type DisconnectPolicy = "grace_forfeit" | "remove_immediately";
+
+export interface TurnDeadlineInfo {
+  activeActorId: string | null;
+  deadlineAt: number | null;
+  timeoutMs: number;
+}
+
+export interface ImmediateRemoveResult<TState = unknown> {
+  nextState: TState;
+  isCompleted: boolean;
+  events?: unknown[];
+}
+
 export interface GameAdapter<TState = unknown, TAction = unknown, TResult = unknown> {
   readonly gameId: string;
+  readonly minPlayers?: number;
+  readonly maxPlayers?: number;
+  readonly manualStart?: boolean;
+  readonly disconnectPolicy?: DisconnectPolicy;
+  readonly defaultSettings?: Record<string, unknown>;
+
   createInitialState(options?: Record<string, unknown>): TState;
   validateAction(state: TState, action: TAction, playerId: string): ValidationOutcome;
   applyAction(state: TState, action: TAction, playerId: string): ActionResult<TState, TResult>;
+  validateSettings?(
+    settings: Record<string, unknown>
+  ): ValidationOutcome & { normalized?: Record<string, unknown> };
+  projectStateForPlayer?(state: TState, playerId: string): unknown;
   serializeState?(state: TState, forPlayerId?: string): unknown;
   handlePlayerDisconnect?(state: TState, playerId: string, graceExpiresAt: number): TState;
   handlePlayerReconnect?(state: TState, playerId: string): TState;
@@ -27,6 +51,12 @@ export interface GameAdapter<TState = unknown, TAction = unknown, TResult = unkn
     forfeitedPlayerId: string,
     remainingPlayerIds: string[]
   ): { nextState: TState; isCompleted: boolean };
+  handleImmediateRemove?(
+    state: TState,
+    playerId: string,
+    reason: "disconnected" | "afk_timeout"
+  ): ImmediateRemoveResult<TState>;
+  getTurnDeadline?(state: TState): TurnDeadlineInfo | null;
 }
 
 /**

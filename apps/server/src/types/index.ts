@@ -13,6 +13,7 @@ export type ErrorCode =
   | "RECONNECT_EXPIRED"
   | "RATE_LIMITED"
   | "INTERNAL_ERROR"
+  | "FORBIDDEN"
   | "NOT_YOUR_TURN"
   | "INVALID_MOVE"
   | "GAME_NOT_IN_PROGRESS"
@@ -26,6 +27,7 @@ export interface RoomPlayerDto {
   displayName?: string;
   connected: boolean;
   joinedAt: number;
+  isHost?: boolean;
 }
 
 export interface RoomDto {
@@ -36,6 +38,9 @@ export interface RoomDto {
   hostPlayerId: string;
   players: RoomPlayerDto[];
   maxPlayers: number;
+  minPlayers?: number;
+  manualStart?: boolean;
+  settings?: Record<string, unknown>;
   version: number;
   createdAt: number;
   gameState?: unknown;
@@ -47,6 +52,10 @@ export type ClientMessageType =
   | "room.join"
   | "room.leave"
   | "room.reconnect"
+  | "room.update_settings"
+  | "update_room_settings"
+  | "room.start"
+  | "start_game"
   | "ping"
   | "game.move"
   | "game.rematch"
@@ -89,6 +98,16 @@ export interface RoomCreatePayload {
   gameId: string;
   maxPlayers?: number;
   displayName?: string;
+  settings?: Record<string, unknown>;
+}
+
+export interface UpdateRoomSettingsPayload {
+  roomId?: string;
+  settings: Record<string, unknown>;
+}
+
+export interface StartGamePayload {
+  roomId?: string;
 }
 
 export interface RoomJoinPayload {
@@ -130,7 +149,16 @@ export interface GameMovePayload {
   orientation?: "h" | "v";
   action?:
     | { type: "MOVE_PAWN"; row: number; col: number }
-    | { type: "PLACE_WALL"; row: number; col: number; orientation: "h" | "v" };
+    | { type: "PLACE_WALL"; row: number; col: number; orientation: "h" | "v" }
+    | { type: "PLAY_CARD"; cardId: string; chosenColor?: "red" | "yellow" | "green" | "blue" }
+    | { type: "DRAW_CARD" }
+    | { type: "PASS_TURN" }
+    | { type: "ACCEPT_DRAW_PENALTY" }
+    | { type: "CHOOSE_WILD_COLOR"; color: "red" | "yellow" | "green" | "blue" }
+    | { type: "CHOOSE_SWAP_TARGET"; targetPlayerId: string }
+    | { type: "CHOOSE_ROULETTE_COLOR"; color: "red" | "yellow" | "green" | "blue" }
+    | { type: "CALL_UNO" }
+    | { type: "CATCH_UNO"; targetPlayerId: string };
 }
 
 export interface GameRematchPayload {
@@ -178,7 +206,16 @@ export interface RoomJoinedPayload {
 
 export interface RoomUpdatedPayload {
   room: RoomDto;
-  reason?: "player_joined" | "player_left" | "player_disconnected" | "player_reconnected" | "status_changed";
+  reason?:
+    | "player_joined"
+    | "player_left"
+    | "player_disconnected"
+    | "player_reconnected"
+    | "player_removed"
+    | "player_kicked_afk"
+    | "settings_updated"
+    | "game_started"
+    | "status_changed";
 }
 
 export interface RoomLeftPayload {

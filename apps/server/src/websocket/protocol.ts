@@ -48,6 +48,151 @@ export function broadcastToRoom<T>(
   }
 }
 
+export function broadcastGameState(
+  room: Room,
+  connectionTracker: ConnectionTracker,
+  gameRegistry: GameAdapterRegistry,
+  excludePlayerId?: string
+): void {
+  if (!room.gameState) return;
+  const adapter = gameRegistry.get(room.gameId);
+
+  if (adapter?.projectStateForPlayer) {
+    for (const player of room.players.values()) {
+      if (excludePlayerId && player.playerId === excludePlayerId) {
+        continue;
+      }
+      if (!player.connected) {
+        continue;
+      }
+      const connection = connectionTracker.getByPlayerId(player.playerId);
+      if (connection) {
+        connection.send<GameStatePayload>({
+          version: PROTOCOL_VERSION,
+          type: "game.state",
+          payload: {
+            roomId: room.id,
+            version: room.version,
+            gameState: adapter.projectStateForPlayer(room.gameState, player.playerId),
+          },
+        });
+      }
+    }
+    return;
+  }
+
+  broadcastToRoom<GameStatePayload>(
+    room,
+    {
+      version: PROTOCOL_VERSION,
+      type: "game.state",
+      payload: {
+        roomId: room.id,
+        version: room.version,
+        gameState: room.gameState,
+      },
+    },
+    connectionTracker,
+    excludePlayerId
+  );
+}
+
+export function getSafeRoomDto(room: Room, gameRegistry: GameAdapterRegistry) {
+  const adapter = gameRegistry.get(room.gameId);
+  if (adapter?.projectStateForPlayer) {
+    return room.toDto(undefined);
+  }
+  return room.toDto();
+}
+
+export function scheduleRoomTurnTimer(
+  room: Room,
+  roomManager: RoomManager,
+  connectionTracker: ConnectionTracker,
+  gameRegistry: GameAdapterRegistry
+): void {
+  roomManager.scheduleTurnTimer(room.id, (timedOutRoom, kickedPlayerId) => {
+    const adapter = gameRegistry.get(timedOutRoom.gameId);
+    if (!adapter?.handleImmediateRemove || !timedOutRoom.gameState) {
+      return;
+    }
+
+    const removeRes = adapter.handleImmediateRemove(
+      timedOutRoom.gameState,
+      kickedPlayerId,
+      "afk_timeout"
+    );
+    timedOutRoom.gameState = removeRes.nextState;
+    if (removeRes.isCompleted) {
+      timedOutRoom.status = "completed";
+    }
+    timedOutRoom.touch();
+
+    const kickedEvent = {
+      type: "player_kicked_afk",
+      reason: "afk_timeout",
+      playerId: kickedPlayerId,
+    };
+
+    const kickedConn = connectionTracker.getByPlayerId(kickedPlayerId);
+    if (kickedConn) {
+      kickedConn.send({
+        version: PROTOCOL_VERSION,
+        type: "game.event",
+        payload: kickedEvent,
+      });
+      kickedConn.send<RoomLeftPayload>({
+        version: PROTOCOL_VERSION,
+        type: "room.left",
+        payload: {
+          roomId: timedOutRoom.id,
+          reason: "afk_timeout",
+        },
+      });
+    }
+
+    const kickResult = roomManager.kickPlayerFromRoom(kickedPlayerId, timedOutRoom.id);
+    if (kickResult.destroyed) {
+      return;
+    }
+
+    const eventsToBroadcast =
+      removeRes.events && removeRes.events.length > 0 ? removeRes.events : [kickedEvent];
+    for (const ev of eventsToBroadcast) {
+      broadcastToRoom(
+        timedOutRoom,
+        {
+          version: PROTOCOL_VERSION,
+          type: "game.event",
+          payload: ev,
+        },
+        connectionTracker
+      );
+    }
+
+    broadcastToRoom<RoomUpdatedPayload>(
+      timedOutRoom,
+      {
+        version: PROTOCOL_VERSION,
+        type: "room.updated",
+        payload: {
+          room: getSafeRoomDto(timedOutRoom, gameRegistry),
+          reason: "player_kicked_afk",
+        },
+      },
+      connectionTracker
+    );
+
+    if (timedOutRoom.gameState) {
+      broadcastGameState(timedOutRoom, connectionTracker, gameRegistry);
+    }
+
+    if (timedOutRoom.status === "in-progress") {
+      scheduleRoomTurnTimer(timedOutRoom, roomManager, connectionTracker, gameRegistry);
+    }
+  });
+}
+
 export async function handleClientMessage(
   connection: PlayerConnection,
   message: ValidatedClientMessage,
@@ -96,12 +241,17 @@ export async function handleClientMessage(
         return;
       }
 
+      const sessionDisplayName = connection.sessionToken
+        ? sessionStore.getSession(connection.sessionToken)?.displayName
+        : undefined;
+
       const result = roomManager.createRoom(
         connection.playerId,
         message.payload.gameId,
         {
           maxPlayers: message.payload.maxPlayers,
-          displayName: message.payload.displayName,
+          displayName: message.payload.displayName ?? sessionDisplayName,
+          settings: message.payload.settings,
         }
       );
 
@@ -131,10 +281,14 @@ export async function handleClientMessage(
         return;
       }
 
+      const sessionDisplayName = connection.sessionToken
+        ? sessionStore.getSession(connection.sessionToken)?.displayName
+        : undefined;
+
       const result = roomManager.joinRoom(
         message.payload.roomCode,
         connection.playerId,
-        message.payload.displayName
+        message.payload.displayName ?? sessionDisplayName
       );
 
       if (!result.success) {
@@ -145,8 +299,8 @@ export async function handleClientMessage(
       const { room, reconnectToken } = result.data;
       logger.info({ roomId: room.id, roomCode: room.code, playerId: connection.playerId }, "Player joined room");
 
-      // If room became full and game state not yet initialized, initialize authoritative game state
-      if (room.isFull() && !room.gameState) {
+      // If room became full (and auto-start is enabled) and game state not yet initialized, initialize authoritative game state
+      if (!room.manualStart && room.isFull() && !room.gameState) {
         const host = Array.from(room.players.values()).find((p) => p.seat === 0);
         const guest = Array.from(room.players.values()).find((p) => p.seat === 1);
         const adapter = gameRegistry.get(room.gameId);
@@ -164,7 +318,7 @@ export async function handleClientMessage(
         type: "room.joined",
         requestId: message.requestId,
         payload: {
-          room: room.toDto(),
+          room: getSafeRoomDto(room, gameRegistry),
           reconnectToken,
         },
       });
@@ -176,7 +330,7 @@ export async function handleClientMessage(
           version: PROTOCOL_VERSION,
           type: "room.updated",
           payload: {
-            room: room.toDto(),
+            room: getSafeRoomDto(room, gameRegistry),
             reason: "player_joined",
           },
         },
@@ -187,20 +341,93 @@ export async function handleClientMessage(
       // If game state is active, broadcast game.state to all players
       if (room.gameState) {
         logger.info({ roomId: room.id, roomCode: room.code }, "Broadcasting authoritative game.state to room players");
-        broadcastToRoom<GameStatePayload>(
-          room,
-          {
-            version: PROTOCOL_VERSION,
-            type: "game.state",
-            payload: {
-              roomId: room.id,
-              version: room.version,
-              gameState: room.gameState,
-            },
-          },
-          connectionTracker
-        );
+        broadcastGameState(room, connectionTracker, gameRegistry);
       }
+      break;
+    }
+
+    case "room.update_settings":
+    case "update_room_settings": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before updating settings", message.requestId);
+        return;
+      }
+
+      const targetRoomId =
+        message.payload.roomId ?? roomManager.getPlayerRoom(connection.playerId)?.id;
+      if (!targetRoomId) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in any room", message.requestId);
+        return;
+      }
+
+      const result = roomManager.updateRoomSettings(
+        targetRoomId,
+        connection.playerId,
+        message.payload.settings
+      );
+
+      if (!result.success) {
+        connection.sendError(result.code, result.message, message.requestId);
+        return;
+      }
+
+      const { room } = result.data;
+      broadcastToRoom<RoomUpdatedPayload>(
+        room,
+        {
+          version: PROTOCOL_VERSION,
+          type: "room.updated",
+          requestId: message.requestId,
+          payload: {
+            room: getSafeRoomDto(room, gameRegistry),
+            reason: "settings_updated",
+          },
+        },
+        connectionTracker
+      );
+      break;
+    }
+
+    case "room.start":
+    case "start_game": {
+      if (!connection.playerId) {
+        connection.sendError("UNAUTHORIZED", "Must identify session before starting game", message.requestId);
+        return;
+      }
+
+      const targetRoomId =
+        message.payload.roomId ?? roomManager.getPlayerRoom(connection.playerId)?.id;
+      if (!targetRoomId) {
+        connection.sendError("NOT_IN_ROOM", "Player is not in any room", message.requestId);
+        return;
+      }
+
+      const result = roomManager.startGame(targetRoomId, connection.playerId);
+      if (!result.success) {
+        connection.sendError(result.code, result.message, message.requestId);
+        return;
+      }
+
+      const { room } = result.data;
+      broadcastToRoom<RoomUpdatedPayload>(
+        room,
+        {
+          version: PROTOCOL_VERSION,
+          type: "room.updated",
+          requestId: message.requestId,
+          payload: {
+            room: getSafeRoomDto(room, gameRegistry),
+            reason: "game_started",
+          },
+        },
+        connectionTracker
+      );
+
+      if (room.gameState) {
+        broadcastGameState(room, connectionTracker, gameRegistry);
+      }
+
+      scheduleRoomTurnTimer(room, roomManager, connectionTracker, gameRegistry);
       break;
     }
 
@@ -216,7 +443,7 @@ export async function handleClientMessage(
         return;
       }
 
-      const { room, destroyed } = leaveResult;
+      const { room, destroyed, events } = leaveResult;
       connection.send<RoomLeftPayload>({
         version: PROTOCOL_VERSION,
         type: "room.left",
@@ -227,18 +454,39 @@ export async function handleClientMessage(
       });
 
       if (!destroyed) {
+        if (events && events.length > 0) {
+          for (const ev of events) {
+            broadcastToRoom(
+              room,
+              {
+                version: PROTOCOL_VERSION,
+                type: "game.event",
+                payload: ev,
+              },
+              connectionTracker
+            );
+          }
+        }
+
         broadcastToRoom<RoomUpdatedPayload>(
           room,
           {
             version: PROTOCOL_VERSION,
             type: "room.updated",
             payload: {
-              room: room.toDto(),
+              room: getSafeRoomDto(room, gameRegistry),
               reason: "player_left",
             },
           },
           connectionTracker
         );
+
+        if (room.gameState && gameRegistry.get(room.gameId)?.disconnectPolicy === "remove_immediately") {
+          broadcastGameState(room, connectionTracker, gameRegistry);
+          if (room.status === "in-progress") {
+            scheduleRoomTurnTimer(room, roomManager, connectionTracker, gameRegistry);
+          }
+        }
       }
       break;
     }
@@ -283,19 +531,7 @@ export async function handleClientMessage(
       );
 
       if (room.gameState) {
-        broadcastToRoom<GameStatePayload>(
-          room,
-          {
-            version: PROTOCOL_VERSION,
-            type: "game.state",
-            payload: {
-              roomId: room.id,
-              version: room.version,
-              gameState: room.gameState,
-            },
-          },
-          connectionTracker
-        );
+        broadcastGameState(room, connectionTracker, gameRegistry);
       }
       break;
     }
@@ -401,8 +637,15 @@ export async function handleClientMessage(
 
       room.gameState = actionResult.nextState;
       const nextState = actionResult.nextState as { status?: string };
-      if (nextState.status === "won" || nextState.status === "draw") {
+      if (
+        nextState.status === "won" ||
+        nextState.status === "draw" ||
+        nextState.status === "finished"
+      ) {
         room.status = "completed";
+        roomManager.clearTurnTimer(room.id);
+      } else {
+        scheduleRoomTurnTimer(room, roomManager, connectionTracker, gameRegistry);
       }
 
       room.incrementVersion();
@@ -421,19 +664,7 @@ export async function handleClientMessage(
         }
       }
 
-      broadcastToRoom<GameStatePayload>(
-        room,
-        {
-          version: PROTOCOL_VERSION,
-          type: "game.state",
-          payload: {
-            roomId: room.id,
-            version: room.version,
-            gameState: room.gameState,
-          },
-        },
-        connectionTracker
-      );
+      broadcastGameState(room, connectionTracker, gameRegistry);
       break;
     }
 
@@ -751,8 +982,15 @@ export async function handleClientMessage(
 
       room.gameState = actionResult.nextState;
       const nextState = actionResult.nextState as { status?: string };
-      if (nextState.status === "won" || nextState.status === "draw") {
+      if (
+        nextState.status === "won" ||
+        nextState.status === "draw" ||
+        nextState.status === "finished"
+      ) {
         room.status = "completed";
+        roomManager.clearTurnTimer(room.id);
+      } else {
+        scheduleRoomTurnTimer(room, roomManager, connectionTracker, gameRegistry);
       }
 
       room.incrementVersion();
@@ -771,19 +1009,7 @@ export async function handleClientMessage(
         }
       }
 
-      broadcastToRoom<GameStatePayload>(
-        room,
-        {
-          version: PROTOCOL_VERSION,
-          type: "game.state",
-          payload: {
-            roomId: room.id,
-            version: room.version,
-            gameState: room.gameState,
-          },
-        },
-        connectionTracker
-      );
+      broadcastGameState(room, connectionTracker, gameRegistry);
       break;
     }
   }

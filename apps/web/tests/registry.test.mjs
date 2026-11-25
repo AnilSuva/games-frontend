@@ -14,10 +14,10 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
   const allGames = getAllGames();
   const visibleGames = getVisibleGames();
 
-  assert.equal(allGames.length, 14, "Visible games and tools should appear in the catalog");
-  assert.equal(visibleGames.length, 14);
+  assert.equal(allGames.length, 15, "Visible games and tools should appear in the catalog");
+  assert.equal(visibleGames.length, 15);
 
-  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "chain-reaction", "wall-maze", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "dodge-arena", "mini-golf-duel"];
+  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "chain-reaction", "wall-maze", "uno-no-mercy", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "dodge-arena", "mini-golf-duel"];
   const returnedIds = allGames.map((g) => g.id);
   assert.deepEqual(returnedIds.sort(), expectedIds.sort());
 
@@ -47,7 +47,7 @@ test("Registry: categories only contain visible playable games", () => {
   const boardIds = boardGames.map((g) => g.id).sort();
   const arcadeIds = arcadeGames.map((g) => g.id).sort();
 
-  assert.deepEqual(boardIds, ["chain-reaction", "checkers", "connect-four", "dots-and-boxes", "tic-tac-toe", "wall-maze"]);
+  assert.deepEqual(boardIds, ["chain-reaction", "checkers", "connect-four", "dots-and-boxes", "tic-tac-toe", "uno-no-mercy", "wall-maze"]);
   assert.deepEqual(arcadeIds, ["brick-blast", "dodge-arena", "knife-thrower", "mini-golf-duel", "ping-pong", "star-catcher", "typing-race"]);
   assert.deepEqual(randomRoyaleTools.map((game) => game.id), ["spin-wheel"]);
 
@@ -119,5 +119,5 @@ test("Registry: unreleased definitions are preserved in master registry for futu
 
 test("Registry: getAllAvailableGameIds matches playable games for static params", () => {
   const ids = getAllAvailableGameIds();
-  assert.deepEqual(ids.sort(), ["brick-blast", "chain-reaction", "checkers", "connect-four", "dodge-arena", "dots-and-boxes", "knife-thrower", "mini-golf-duel", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race", "wall-maze"]);
+  assert.deepEqual(ids.sort(), ["brick-blast", "chain-reaction", "checkers", "connect-four", "dodge-arena", "dots-and-boxes", "knife-thrower", "mini-golf-duel", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race", "uno-no-mercy", "wall-maze"]);
 });

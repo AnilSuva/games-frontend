@@ -19,6 +19,7 @@ export interface RoomPlayerDto {
   displayName?: string;
   connected: boolean;
   joinedAt: number;
+  isHost?: boolean;
 }
 
 export type RoomStatus = "waiting" | "in-progress" | "completed" | "abandoned";
@@ -31,6 +32,9 @@ export interface RoomDto {
   hostPlayerId: string;
   players: RoomPlayerDto[];
   maxPlayers: number;
+  minPlayers?: number;
+  manualStart?: boolean;
+  settings?: Record<string, unknown>;
   version: number;
   createdAt: number;
   gameState?: unknown;
@@ -346,6 +350,142 @@ export interface OnlineWallMazeState {
 export type WallMazeOnlineMoveAction =
   | { type: "MOVE_PAWN"; row: number; col: number }
   | { type: "PLACE_WALL"; row: number; col: number; orientation: WallMazeOnlineOrientation };
+
+// ==========================================
+// UNO Show 'Em No Mercy Types
+// ==========================================
+
+export type UnoCardColor = "red" | "yellow" | "green" | "blue";
+export type UnoColor = UnoCardColor | "wild";
+
+export type UnoCardKind =
+  | "number"
+  | "draw2"
+  | "draw4"
+  | "skip"
+  | "skip_everyone"
+  | "reverse"
+  | "discard_all"
+  | "wild_reverse_draw4"
+  | "wild_color_roulette"
+  | "wild_draw6"
+  | "wild_draw10";
+
+export interface UnoCard {
+  id: string;
+  color: UnoColor;
+  kind: UnoCardKind;
+  number?: number;
+}
+
+export interface UnoSettings {
+  startingHandSize: number;
+  mercyLimit: number;
+  maxPlayers: number;
+  turnTimeoutMs: number;
+  drawUntilPlayable: boolean;
+  endOnFirstMercyLoss: boolean;
+}
+
+export type UnoPlayerStatus =
+  | "active"
+  | "eliminated_mercy"
+  | "disconnected"
+  | "kicked_afk";
+
+export interface UnoPublicPlayerInfo {
+  playerId: string;
+  displayName?: string;
+  seat: number;
+  status: UnoPlayerStatus;
+  cardCount: number;
+  unoCalled: boolean;
+  vulnerableToUnoCatch: boolean;
+}
+
+export type UnoPhase =
+  | "playing"
+  | "choosing_wild_color"
+  | "choosing_swap_target"
+  | "choosing_roulette_color"
+  | "finished";
+
+export type UnoResultReason =
+  | "emptied_hand"
+  | "mercy_elimination"
+  | "single_loser_mercy"
+  | "last_player_standing";
+
+export interface UnoFinalStanding {
+  playerId: string;
+  displayName: string;
+  seat: number;
+  status: UnoPlayerStatus;
+  cardCount: number;
+  isLoser: boolean;
+  isWinner: boolean;
+}
+
+export interface OnlineUnoNoMercyState {
+  gameId: "uno-no-mercy";
+  status: "in_progress" | "won" | "finished";
+  phase: UnoPhase;
+  settings: UnoSettings;
+  players: UnoPublicPlayerInfo[];
+  myPlayerId: string;
+  myHand: UnoCard[];
+  activeActorId: string | null;
+  direction: 1 | -1;
+  activeColor: UnoCardColor;
+  topDiscard: UnoCard;
+  discardCount: number;
+  drawPileCount: number;
+  eliminatedReserveCount: number;
+  pendingDrawCount: number;
+  pendingDrawMinValue: 0 | 2 | 4 | 6 | 10;
+  pendingWildCardKind: "wild_reverse_draw4" | "wild_draw6" | "wild_draw10" | null;
+  hasDrawnThisTurn: boolean;
+  lastRouletteReveal: UnoCard[];
+  turnDeadlineAt: number | null;
+  winnerId: string | null;
+  loserId: string | null;
+  loserName: string | null;
+  loserCardCount: number | null;
+  resultReason: UnoResultReason | null;
+  finalStandings?: UnoFinalStanding[];
+  moveCount: number;
+}
+
+export type UnoAction =
+  | { type: "PLAY_CARD"; cardId: string; chosenColor?: UnoCardColor }
+  | { type: "DRAW_CARD" }
+  | { type: "PASS_TURN" }
+  | { type: "ACCEPT_DRAW_PENALTY" }
+  | { type: "CHOOSE_WILD_COLOR"; color: UnoCardColor }
+  | { type: "CHOOSE_SWAP_TARGET"; targetPlayerId: string }
+  | { type: "CHOOSE_ROULETTE_COLOR"; color: UnoCardColor }
+  | { type: "CALL_UNO" }
+  | { type: "CATCH_UNO"; targetPlayerId: string };
+
+export interface UnoGameEventPayload {
+  type: string;
+  playerId?: string;
+  playerName?: string;
+  targetPlayerId?: string;
+  catcherId?: string;
+  reason?: string;
+  card?: UnoCard;
+  color?: UnoCardColor;
+  chosenColor?: UnoCardColor;
+  kind?: string;
+  count?: number;
+  drawnCount?: number;
+  cardsDrawn?: number;
+  cardCount?: number;
+  mercyLimit?: number;
+  direction?: 1 | -1;
+  winnerId?: string;
+}
 
 export interface ServerEnvelope<T = unknown> {
   version: 1;
