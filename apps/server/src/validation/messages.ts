@@ -8,6 +8,7 @@ import type {
   GameInputPayload,
   GameMovePayload,
   GameRematchPayload,
+  GameShotPayload,
   RoomCreatePayload,
   RoomJoinPayload,
   RoomLeavePayload,
@@ -60,17 +61,38 @@ export const gameMoveSchema = z
         col: z.number().int().min(0),
       })
       .optional(),
+    shot: z
+      .object({
+        dx: z.number(),
+        dy: z.number(),
+        power: z.number().min(0).max(1),
+      })
+      .optional(),
+    row: z.number().int().min(0).max(7).optional(),
+    col: z.number().int().min(0).max(5).optional(),
   })
   .refine(
     (data) =>
       data.position !== undefined ||
       data.column !== undefined ||
       (data.from !== undefined && data.to !== undefined) ||
-      data.edge !== undefined,
+      data.edge !== undefined ||
+      data.shot !== undefined ||
+      (data.row !== undefined && data.col !== undefined),
     {
-      message: "Either position, column, (from and to), or edge must be provided",
+      message: "Either position, column, (from and to), edge, shot, or (row and col) must be provided",
     }
   );
+
+export const gameShotSchema = z.object({
+  roomId: z.string().min(1).max(64),
+  aim: z.object({
+    x: z.number(),
+    y: z.number(),
+  }),
+  power: z.number().min(0).max(1),
+  seq: z.number().int().optional(),
+});
 
 export const gameRematchSchema = z.object({
   roomId: z.string().min(1).max(64),
@@ -101,6 +123,7 @@ const baseEnvelopeSchema = z.object({
     "game.rematch",
     "game.input",
     "game.event",
+    "game.shot",
   ]),
   requestId: z.string().min(1).max(64),
   payload: z.unknown().default({}),
@@ -116,7 +139,8 @@ export type ValidatedClientMessage =
   | (ClientEnvelope<GameMovePayload> & { type: "game.move" })
   | (ClientEnvelope<GameRematchPayload> & { type: "game.rematch" })
   | (ClientEnvelope<GameInputPayload> & { type: "game.input" })
-  | (ClientEnvelope<GameEventPayload> & { type: "game.event" });
+  | (ClientEnvelope<GameEventPayload> & { type: "game.event" })
+  | (ClientEnvelope<GameShotPayload> & { type: "game.shot" });
 
 export type ParseResult =
   | { success: true; message: ValidatedClientMessage }
@@ -407,6 +431,27 @@ export function parseClientMessage(
         message: {
           version: PROTOCOL_VERSION,
           type: "game.event",
+          requestId: envelope.requestId,
+          payload: res.data,
+        },
+      };
+    }
+
+    case "game.shot": {
+      const res = gameShotSchema.safeParse(payload);
+      if (!res.success) {
+        return {
+          success: false,
+          code: "INVALID_MESSAGE",
+          error: res.error.issues[0]?.message ?? "Invalid game.shot payload",
+          requestId: envelope.requestId,
+        };
+      }
+      return {
+        success: true,
+        message: {
+          version: PROTOCOL_VERSION,
+          type: "game.shot",
           requestId: envelope.requestId,
           payload: res.data,
         },

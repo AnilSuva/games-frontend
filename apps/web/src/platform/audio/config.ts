@@ -13,6 +13,18 @@ export interface SoundConfig {
   victory: number;
   lose: number;
   checkersSlide: number;
+  golfSwing: number;
+  golfHit: number;
+  golfWall: number;
+  golfBumper: number;
+  golfWater: number;
+  golfSink: number;
+  golfRollGrass: number;
+  golfRollSand: number;
+  golfHoleComplete: number;
+  golfScorecard: number;
+  golfVictory: number;
+  golfDefeat: number;
 }
 
 export const SOUND_CONFIG: SoundConfig = {
@@ -23,6 +35,18 @@ export const SOUND_CONFIG: SoundConfig = {
   victory: 70,
   lose: 65,
   checkersSlide: 65,
+  golfSwing: 65,
+  golfHit: 75,
+  golfWall: 60,
+  golfBumper: 70,
+  golfWater: 75,
+  golfSink: 85,
+  golfRollGrass: 35,
+  golfRollSand: 40,
+  golfHoleComplete: 70,
+  golfScorecard: 60,
+  golfVictory: 75,
+  golfDefeat: 75,
 };
 
 export type SpinTickSoundName = `spinTick${1 | 2 | 3 | 4 | 5 | 6 | 7}`;
@@ -45,6 +69,18 @@ export const SOUND_FILES: Record<SoundEffectName, string> = {
   checkersSlide: "/audio/chekers/chekers-slider.mp3",
   victory: "/audio/general/victory.mp3",
   lose: "/audio/general/lose.mp3",
+  golfSwing: "/audio/mini-golf-duel/club-swing.wav",
+  golfHit: "/audio/mini-golf-duel/ball-hit.wav",
+  golfWall: "/audio/mini-golf-duel/wall-impact.wav",
+  golfBumper: "/audio/mini-golf-duel/bumper-impact.ogg",
+  golfWater: "/audio/mini-golf-duel/water-splash.wav",
+  golfSink: "/audio/mini-golf-duel/hole-sink.wav",
+  golfRollGrass: "/audio/mini-golf-duel/ball-roll-grass.ogg",
+  golfRollSand: "/audio/mini-golf-duel/ball-roll-sand.ogg",
+  golfHoleComplete: "/audio/mini-golf-duel/hole-complete.wav",
+  golfScorecard: "/audio/mini-golf-duel/scorecard-transition.wav",
+  golfVictory: "/audio/mini-golf-duel/match-victory.ogg",
+  golfDefeat: "/audio/mini-golf-duel/match-defeat.ogg",
   spinTick1: "/audio/spin-wheel/spin-1.mp3",
   spinTick2: "/audio/spin-wheel/spin-2.mp3",
   spinTick3: "/audio/spin-wheel/spin-3.mp3",

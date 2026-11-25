@@ -8,6 +8,8 @@ import { DotsAndBoxesAdapter } from "./dots-and-boxes/DotsAndBoxesAdapter.js";
 import { StarCatcherAdapter } from "./star-catcher/StarCatcherAdapter.js";
 import { TypingRaceAdapter } from "./typing-race/TypingRaceAdapter.js";
 import { DodgeArenaAdapter } from "./dodge-arena/DodgeArenaAdapter.js";
+import { MiniGolfAdapter } from "./mini-golf-duel/MiniGolfAdapter.js";
+import { ChainReactionAdapter } from "./chain-reaction/ChainReactionAdapter.js";
 
 export * from "./GameAdapter.js";
 export * from "./tic-tac-toe/index.js";
@@ -64,6 +66,21 @@ export type {
   DodgeArenaLives,
 } from "./dodge-arena/types.js";
 
+export { MiniGolfAdapter } from "./mini-golf-duel/MiniGolfAdapter.js";
+export type {
+  MiniGolfGameState,
+  MiniGolfAction,
+  MiniGolfPlayer,
+  SimulationResult as MiniGolfSimulationResult,
+} from "./mini-golf-duel/types.js";
+
+export { ChainReactionAdapter } from "./chain-reaction/ChainReactionAdapter.js";
+export type {
+  ChainReactionGameState,
+  ChainReactionAction,
+  Player as ChainReactionPlayer,
+} from "./chain-reaction/types.js";
+
 export function createDefaultGameRegistry(): GameAdapterRegistry {
   const registry = new GameAdapterRegistry();
   registry.register(new TicTacToeAdapter());
@@ -75,6 +92,8 @@ export function createDefaultGameRegistry(): GameAdapterRegistry {
   registry.register(new StarCatcherAdapter());
   registry.register(new TypingRaceAdapter());
   registry.register(new DodgeArenaAdapter());
+  registry.register(new MiniGolfAdapter());
+  registry.register(new ChainReactionAdapter());
   return registry;
 }
 

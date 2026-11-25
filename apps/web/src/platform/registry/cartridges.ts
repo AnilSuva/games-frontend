@@ -34,8 +34,14 @@ export const CARTRIDGE_MAP: Record<
   "dodge-arena": React.lazy(
     () => import("@/games/arcade/dodge-arena/components/DodgeArenaGame")
   ),
+  "mini-golf-duel": React.lazy(
+    () => import("@/games/arcade/mini-golf-duel/components/MiniGolfGame")
+  ),
   "dots-and-boxes": React.lazy(
     () => import("@/games/board/dots-and-boxes/components/DotsAndBoxesGame")
+  ),
+  "chain-reaction": React.lazy(
+    () => import("@/games/board/chain-reaction/components/ChainReactionGame")
   ),
   "typing-race": React.lazy(
     () => import("@/games/arcade/typing-race/components/TypingRaceGame")

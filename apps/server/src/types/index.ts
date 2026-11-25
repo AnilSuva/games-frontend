@@ -51,7 +51,8 @@ export type ClientMessageType =
   | "game.move"
   | "game.rematch"
   | "game.input"
-  | "game.event";
+  | "game.event"
+  | "game.shot";
 
 export type ServerMessageType =
   | "session.ready"
@@ -119,6 +120,13 @@ export interface GameMovePayload {
     row: number;
     col: number;
   };
+  shot?: {
+    dx: number;
+    dy: number;
+    power: number;
+  };
+  row?: number;
+  col?: number;
 }
 
 export interface GameRematchPayload {
@@ -135,6 +143,16 @@ export interface GameEventPayload {
   roomId: string;
   event: string;
   data?: unknown;
+}
+
+export interface GameShotPayload {
+  roomId: string;
+  aim: {
+    x: number;
+    y: number;
+  };
+  power: number;
+  seq?: number;
 }
 
 // Server payloads

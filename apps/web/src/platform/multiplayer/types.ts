@@ -270,6 +270,37 @@ export interface OnlineDotsBoxesState {
   disconnectedPlayerId?: string | null;
 }
 
+export type ChainReactionOnlinePlayer = "X" | "O";
+
+export interface ChainReactionOnlineCell {
+  count: number;
+  owner: ChainReactionOnlinePlayer | null;
+}
+
+export interface ChainReactionOnlineLastMove {
+  row: number;
+  col: number;
+  player: ChainReactionOnlinePlayer;
+  moveNumber: number;
+}
+
+export interface OnlineChainReactionState {
+  board: ChainReactionOnlineCell[][];
+  currentPlayer: ChainReactionOnlinePlayer;
+  startingPlayer: ChainReactionOnlinePlayer;
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  winner: ChainReactionOnlinePlayer | null;
+  movesPlayed: number;
+  moveNumber: number;
+  lastMove: ChainReactionOnlineLastMove | null;
+  orbCounts: Record<ChainReactionOnlinePlayer, number>;
+  playerRoles: Record<string, ChainReactionOnlinePlayer>;
+  rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+}
+
 export interface ServerEnvelope<T = unknown> {
   version: 1;
   type: string;

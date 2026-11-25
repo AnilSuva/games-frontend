@@ -88,6 +88,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/board/dots-and-boxes/components/DotsAndBoxesGame"),
   },
   {
+    id: "chain-reaction",
+    title: "Chain Reaction",
+    shortDescription: "Trigger explosive orb cascades across a tactical grid.",
+    description:
+      "Place orbs on a 6x8 board. When a cell reaches critical mass, it explodes into orthogonal neighbors, converting enemy orbs and triggering chain reactions. Play local matches, challenge intelligent bots, or duel online.",
+    category: "board",
+    engine: "react-dom",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot", "online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "4/3",
+    iconName: "zap",
+    badgeText: "New",
+    tags: ["Strategy", "Turn-Based", "Cascade", "2-Player"],
+    loader: () =>
+      import("@/games/board/chain-reaction/components/ChainReactionGame"),
+  },
+  {
     id: "chess",
     title: "Chess",
     shortDescription: "The timeless battle of kings, queens, and pawns.",
@@ -202,6 +221,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
     tags: ["Arcade", "Survival", "Multiplayer", "Action", "2-Player", "Reflexes"],
     loader: () =>
       import("@/games/arcade/dodge-arena/components/DodgeArenaGame"),
+  },
+  {
+    id: "mini-golf-duel",
+    title: "Mini Golf Duel",
+    shortDescription: "Turn-based 2-player mini-golf arcade duel.",
+    description:
+      "Control your golf ball, calculate angles and bank shots, avoid water hazards, and sink the ball in the fewest strokes across 3 challenging courses.",
+    category: "arcade",
+    engine: "phaser",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot", "online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "responsive",
+    iconName: "target",
+    badgeText: "New",
+    tags: ["Arcade", "Golf", "Physics", "Multiplayer", "2-Player", "Sports"],
+    loader: () =>
+      import("@/games/arcade/mini-golf-duel/components/MiniGolfGame"),
   },
   {
     id: "typing-race",

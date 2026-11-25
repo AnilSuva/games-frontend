@@ -14,10 +14,10 @@ test("Registry: getAllGames and getVisibleGames return only built, playable game
   const allGames = getAllGames();
   const visibleGames = getVisibleGames();
 
-  assert.equal(allGames.length, 11, "Visible games and tools should appear in the catalog");
-  assert.equal(visibleGames.length, 11);
+  assert.equal(allGames.length, 13, "Visible games and tools should appear in the catalog");
+  assert.equal(visibleGames.length, 13);
 
-  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "dodge-arena"];
+  const expectedIds = ["tic-tac-toe", "connect-four", "dots-and-boxes", "chain-reaction", "brick-blast", "spin-wheel", "checkers", "ping-pong", "knife-thrower", "star-catcher", "typing-race", "dodge-arena", "mini-golf-duel"];
   const returnedIds = allGames.map((g) => g.id);
   assert.deepEqual(returnedIds.sort(), expectedIds.sort());
 
@@ -47,8 +47,8 @@ test("Registry: categories only contain visible playable games", () => {
   const boardIds = boardGames.map((g) => g.id).sort();
   const arcadeIds = arcadeGames.map((g) => g.id).sort();
 
-  assert.deepEqual(boardIds, ["checkers", "connect-four", "dots-and-boxes", "tic-tac-toe"]);
-  assert.deepEqual(arcadeIds, ["brick-blast", "dodge-arena", "knife-thrower", "ping-pong", "star-catcher", "typing-race"]);
+  assert.deepEqual(boardIds, ["chain-reaction", "checkers", "connect-four", "dots-and-boxes", "tic-tac-toe"]);
+  assert.deepEqual(arcadeIds, ["brick-blast", "dodge-arena", "knife-thrower", "mini-golf-duel", "ping-pong", "star-catcher", "typing-race"]);
   assert.deepEqual(randomRoyaleTools.map((game) => game.id), ["spin-wheel"]);
 
   assert.ok(!boardIds.includes("chess"));
@@ -68,6 +68,8 @@ test("Registry: getGameMetadata returns undefined for unfinished games (protecti
   assert.equal(getGameMetadata("checkers")?.title, "Checkers");
   assert.ok(getGameMetadata("dots-and-boxes") !== undefined);
   assert.equal(getGameMetadata("dots-and-boxes")?.title, "Dots and Boxes");
+  assert.ok(getGameMetadata("chain-reaction") !== undefined);
+  assert.equal(getGameMetadata("chain-reaction")?.title, "Chain Reaction");
   assert.ok(getGameMetadata("brick-blast") !== undefined);
   assert.equal(getGameMetadata("brick-blast")?.title, "Brick Blast");
   assert.ok(getGameMetadata("ping-pong") !== undefined);
@@ -80,6 +82,8 @@ test("Registry: getGameMetadata returns undefined for unfinished games (protecti
   assert.equal(getGameMetadata("typing-race")?.title, "Typing Race");
   assert.ok(getGameMetadata("dodge-arena") !== undefined);
   assert.equal(getGameMetadata("dodge-arena")?.title, "Dodge Arena");
+  assert.ok(getGameMetadata("mini-golf-duel") !== undefined);
+  assert.equal(getGameMetadata("mini-golf-duel")?.title, "Mini Golf Duel");
   assert.equal(getGameMetadata("spin-wheel")?.title, "Spin Wheel");
 
   // Unfinished games must return undefined so dynamic route triggers 404 notFound()
@@ -113,5 +117,5 @@ test("Registry: unreleased definitions are preserved in master registry for futu
 
 test("Registry: getAllAvailableGameIds matches playable games for static params", () => {
   const ids = getAllAvailableGameIds();
-  assert.deepEqual(ids.sort(), ["brick-blast", "checkers", "connect-four", "dodge-arena", "dots-and-boxes", "knife-thrower", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
+  assert.deepEqual(ids.sort(), ["brick-blast", "chain-reaction", "checkers", "connect-four", "dodge-arena", "dots-and-boxes", "knife-thrower", "mini-golf-duel", "ping-pong", "spin-wheel", "star-catcher", "tic-tac-toe", "typing-race"]);
 });

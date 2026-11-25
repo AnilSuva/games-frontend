@@ -52,6 +52,10 @@ export interface GameModeSelectorProps {
   onSelectConfiguredMode: (modeId: string, configValue: string) => void;
   /** Optional screen change callback for lifecycle tracking */
   onScreenChange?: (screen: "main" | "config") => void;
+  /** Optional callback to open a "How to Play" guide */
+  onHowToPlay?: () => void;
+  /** Optional custom label for the "How to Play" button (defaults to "How to Play") */
+  howToPlayLabel?: string;
   /** Optional footer content (e.g., player color legend) */
   footer?: ReactNode;
   /** Optional additional CSS classes */
@@ -77,6 +81,8 @@ export function GameModeSelector({
   onSelectMode,
   onSelectConfiguredMode,
   onScreenChange,
+  onHowToPlay,
+  howToPlayLabel = "How to Play",
   footer,
   className = "",
 }: GameModeSelectorProps) {
@@ -167,6 +173,24 @@ export function GameModeSelector({
                   </span>
                 </button>
               )
+            )}
+
+            {onHowToPlay && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.play("buttonClick");
+                  onHowToPlay();
+                }}
+                className="tactile-btn group w-full min-h-[48px] sm:min-h-[52px] py-3 px-5 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-[#faf9f6] active:bg-[#f0eee9] border border-[#e6e3dc] hover:border-[#1c1917] text-[#1c1917] transition-all duration-200 active:scale-[0.98] shadow-2xs flex items-center justify-center gap-2.5 cursor-pointer text-center"
+              >
+                <span className="w-5 h-5 rounded-full border border-[#d2cecd] group-hover:border-[#1c1917] text-[#6b665f] group-hover:text-[#1c1917] flex items-center justify-center text-xs font-bold transition-colors">
+                  ?
+                </span>
+                <span className="text-sm sm:text-base font-semibold tracking-tight text-[#1c1917] group-hover:text-black transition-colors">
+                  {howToPlayLabel}
+                </span>
+              </button>
             )}
           </div>
 
