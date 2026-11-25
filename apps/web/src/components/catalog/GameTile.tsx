@@ -3,7 +3,11 @@
 import Link from "next/link";
 import type { GameMetadata } from "@/platform/registry/types";
 import { soundManager } from "@/platform/audio";
-import { ChainReactionLogoSvg, MiniGolfDuelLogoSvg } from "./GameLogoSvgs";
+import {
+  ChainReactionLogoSvg,
+  MiniGolfDuelLogoSvg,
+  UnoNoMercyLogoSvg,
+} from "./GameLogoSvgs";
 
 interface GameTileProps {
   game: GameMetadata;
@@ -419,6 +423,12 @@ function GameTileIllustration({ id }: { id: string }) {
       return (
         <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
           <MiniGolfDuelLogoSvg className="w-full h-full max-w-[96px] max-h-[72px]" />
+        </div>
+      );
+    case "uno-no-mercy":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
+          <UnoNoMercyLogoSvg className="w-full h-full max-w-[96px] max-h-[72px]" />
         </div>
       );
     default:

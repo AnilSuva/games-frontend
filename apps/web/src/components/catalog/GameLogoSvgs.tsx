@@ -75,3 +75,58 @@ export function MiniGolfDuelLogoSvg({ className }: { className: string }) {
     </svg>
   );
 }
+
+export function UnoNoMercyLogoSvg({ className }: { className: string }) {
+  return (
+    <svg className={className} viewBox="0 0 96 72" fill="none">
+      {/* Left tilted Red +4 card */}
+      <g transform="translate(27 39) rotate(-18)">
+        <rect x="-13" y="-20" width="26" height="40" rx="4.5" fill="#dc2626" stroke="#ffffff" strokeWidth="1.8" />
+        <ellipse cx="0" cy="0" rx="9" ry="13" transform="rotate(-12)" fill="#ffffff" fillOpacity="0.94" />
+        <text x="0" y="3.5" textAnchor="middle" fill="#dc2626" fontSize="10" fontWeight="900" fontFamily="system-ui, sans-serif">
+          +4
+        </text>
+        <text x="-8.5" y="-12" fill="#ffffff" fontSize="5.5" fontWeight="800" fontFamily="system-ui, sans-serif">
+          +4
+        </text>
+      </g>
+
+      {/* Right tilted Yellow/Green/Blue card */}
+      <g transform="translate(69 39) rotate(18)">
+        <rect x="-13" y="-20" width="26" height="40" rx="4.5" fill="#2563eb" stroke="#ffffff" strokeWidth="1.8" />
+        <ellipse cx="0" cy="0" rx="9" ry="13" transform="rotate(-12)" fill="#ffffff" fillOpacity="0.94" />
+        <text x="0" y="3.5" textAnchor="middle" fill="#1d4ed8" fontSize="10" fontWeight="900" fontFamily="system-ui, sans-serif">
+          +2
+        </text>
+        <text x="5.5" y="-12" fill="#ffffff" fontSize="5.5" fontWeight="800" fontFamily="system-ui, sans-serif">
+          +2
+        </text>
+      </g>
+
+      {/* Center Front Obsidian Wild +10 Card */}
+      <g transform="translate(48 35)">
+        <rect x="-15" y="-23" width="30" height="46" rx="5" fill="#18181b" stroke="#ffffff" strokeWidth="2" />
+        {/* 4-Color corner accents */}
+        <circle cx="-8.5" cy="-16" r="2" fill="#dc2626" />
+        <circle cx="-4" cy="-16" r="2" fill="#eab308" />
+        <circle cx="4" cy="16" r="2" fill="#16a34a" />
+        <circle cx="8.5" cy="16" r="2" fill="#2563eb" />
+        {/* Inner White Oval */}
+        <ellipse cx="0" cy="0" rx="10.5" ry="15" transform="rotate(-14)" fill="#ffffff" />
+        {/* Bold +10 */}
+        <text
+          x="0"
+          y="4.5"
+          textAnchor="middle"
+          fill="#18181b"
+          fontSize="12"
+          fontWeight="900"
+          letterSpacing="-0.5"
+          fontFamily="system-ui, sans-serif"
+        >
+          +10
+        </text>
+      </g>
+    </svg>
+  );
+}

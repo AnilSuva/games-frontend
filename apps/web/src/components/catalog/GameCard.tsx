@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { GameMetadata } from "@/platform/registry/types";
 import { soundManager } from "@/platform/audio";
-import { ChainReactionLogoSvg, MiniGolfDuelLogoSvg } from "./GameLogoSvgs";
+import {
+  ChainReactionLogoSvg,
+  MiniGolfDuelLogoSvg,
+  UnoNoMercyLogoSvg,
+} from "./GameLogoSvgs";
 
 interface GameCardProps {
   game: GameMetadata;
@@ -394,6 +398,12 @@ function GameIllustration({ id }: { id: string }) {
           <MiniGolfDuelLogoSvg className="w-auto h-20 max-w-full" />
         </div>
       );
+    case "uno-no-mercy":
+      return (
+        <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center p-2">
+          <UnoNoMercyLogoSvg className="w-auto h-20 max-w-full" />
+        </div>
+      );
     default:
       return (
         <div className="w-full h-24 rounded-lg bg-[#faf9f6] border border-[#eeece6] flex items-center justify-center text-[#9c978e]">
@@ -464,6 +474,7 @@ export function GameCard({ game, className = "" }: GameCardProps) {
         <span className="flex items-center gap-1">
           {game.supportedModes.includes("pvp-bot") && <span>• Solo Bot</span>}
           {game.supportedModes.includes("local-2p") && <span>• 2-Player</span>}
+          {game.id === "uno-no-mercy" && <span>• 2-6 Online</span>}
         </span>
       </div>
     </CardWrapper>
