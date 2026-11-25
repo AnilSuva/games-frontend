@@ -68,8 +68,24 @@ export const gameMoveSchema = z
         power: z.number().min(0).max(1),
       })
       .optional(),
-    row: z.number().int().min(0).max(7).optional(),
-    col: z.number().int().min(0).max(5).optional(),
+    row: z.number().int().min(0).max(8).optional(),
+    col: z.number().int().min(0).max(8).optional(),
+    orientation: z.enum(["h", "v"]).optional(),
+    action: z
+      .discriminatedUnion("type", [
+        z.object({
+          type: z.literal("MOVE_PAWN"),
+          row: z.number().int().min(0).max(8),
+          col: z.number().int().min(0).max(8),
+        }),
+        z.object({
+          type: z.literal("PLACE_WALL"),
+          row: z.number().int().min(0).max(7),
+          col: z.number().int().min(0).max(7),
+          orientation: z.enum(["h", "v"]),
+        }),
+      ])
+      .optional(),
   })
   .refine(
     (data) =>
@@ -78,9 +94,10 @@ export const gameMoveSchema = z
       (data.from !== undefined && data.to !== undefined) ||
       data.edge !== undefined ||
       data.shot !== undefined ||
+      data.action !== undefined ||
       (data.row !== undefined && data.col !== undefined),
     {
-      message: "Either position, column, (from and to), edge, shot, or (row and col) must be provided",
+      message: "Either position, column, (from and to), edge, shot, action, or (row and col) must be provided",
     }
   );
 

@@ -301,6 +301,52 @@ export interface OnlineChainReactionState {
   disconnectedPlayerId?: string | null;
 }
 
+export type WallMazeOnlinePlayer = "X" | "O";
+
+export type WallMazeOnlineOrientation = "h" | "v";
+
+export interface WallMazeOnlinePosition {
+  row: number;
+  col: number;
+}
+
+export interface WallMazeOnlineWall {
+  row: number;
+  col: number;
+  orientation: WallMazeOnlineOrientation;
+  owner: WallMazeOnlinePlayer;
+}
+
+export interface WallMazeOnlineLastAction {
+  type: "MOVE_PAWN" | "PLACE_WALL";
+  row: number;
+  col: number;
+  orientation?: WallMazeOnlineOrientation;
+  player: WallMazeOnlinePlayer;
+  moveCount: number;
+}
+
+export interface OnlineWallMazeState {
+  pawns: Record<WallMazeOnlinePlayer, WallMazeOnlinePosition>;
+  walls: WallMazeOnlineWall[];
+  wallsLeft: Record<WallMazeOnlinePlayer, number>;
+  currentPlayer: WallMazeOnlinePlayer;
+  startingPlayer: WallMazeOnlinePlayer;
+  status: "waiting" | "in_progress" | "won" | "abandoned";
+  winner: WallMazeOnlinePlayer | null;
+  moveCount: number;
+  lastAction: WallMazeOnlineLastAction | null;
+  playerRoles: Record<string, WallMazeOnlinePlayer>;
+  rematchRequests: string[];
+  resultReason?: ResultReason;
+  disconnectGraceExpiresAt?: number | null;
+  disconnectedPlayerId?: string | null;
+}
+
+export type WallMazeOnlineMoveAction =
+  | { type: "MOVE_PAWN"; row: number; col: number }
+  | { type: "PLACE_WALL"; row: number; col: number; orientation: WallMazeOnlineOrientation };
+
 export interface ServerEnvelope<T = unknown> {
   version: 1;
   type: string;

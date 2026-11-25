@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { GameMetadata } from "@/platform/registry/types";
 import { soundManager } from "@/platform/audio";
+import { ChainReactionLogoSvg, MiniGolfDuelLogoSvg } from "./GameLogoSvgs";
 
 interface GameTileProps {
   game: GameMetadata;
@@ -121,6 +122,27 @@ function GameTileIllustration({ id }: { id: string }) {
         <div className="w-full h-full max-w-[120px] max-h-[72px] flex items-center justify-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-[#e0530a] bg-[#fff7ed] flex items-center justify-center text-lg font-bold text-[#e0530a] shrink-0">●</div>
           <div className="w-10 h-10 rounded-full border-2 border-[#2563eb] bg-[#eff6ff] flex items-center justify-center text-lg font-bold text-[#2563eb] shrink-0">●</div>
+        </div>
+      );
+    case "wall-maze":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[112px] flex items-center justify-center">
+          <svg className="w-full h-full max-w-[84px] max-h-[84px]" viewBox="0 0 80 68" fill="none">
+            <rect x="10" y="6" width="60" height="56" rx="6" fill="#e7e2d8" stroke="#d6d0c4" strokeWidth="1.2" />
+            <rect x="14" y="10" width="15" height="14" rx="2.5" fill="#fffaf4" />
+            <rect x="32.5" y="10" width="15" height="14" rx="2.5" fill="#fffaf4" />
+            <rect x="51" y="10" width="15" height="14" rx="2.5" fill="#fffaf4" />
+            <rect x="14" y="27" width="15" height="14" rx="2.5" fill="#ffffff" />
+            <rect x="32.5" y="27" width="15" height="14" rx="2.5" fill="#ffffff" />
+            <rect x="51" y="27" width="15" height="14" rx="2.5" fill="#ffffff" />
+            <rect x="14" y="44" width="15" height="14" rx="2.5" fill="#f6f9ff" />
+            <rect x="32.5" y="44" width="15" height="14" rx="2.5" fill="#f6f9ff" />
+            <rect x="51" y="44" width="15" height="14" rx="2.5" fill="#f6f9ff" />
+            <rect x="14" y="24" width="33.5" height="3" rx="1.5" fill="#1c1917" />
+            <rect x="47.5" y="27" width="3.5" height="31" rx="1.75" fill="#1c1917" />
+            <circle cx="40" cy="51" r="5" fill="#e0530a" stroke="#ffffff" strokeWidth="1.5" />
+            <circle cx="40" cy="17" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="1.5" />
+          </svg>
         </div>
       );
     case "dots-and-boxes":
@@ -385,6 +407,18 @@ function GameTileIllustration({ id }: { id: string }) {
             <circle cx="71" cy="34" r="5" fill="#fbbf24" stroke="#fde047" strokeWidth="0.8" />
             <text x="71" y="37" textAnchor="middle" fill="#78350f" fontSize="7" fontWeight="bold">1</text>
           </svg>
+        </div>
+      );
+    case "chain-reaction":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
+          <ChainReactionLogoSvg className="w-full h-full max-w-[96px] max-h-[72px]" />
+        </div>
+      );
+    case "mini-golf-duel":
+      return (
+        <div className="w-full h-full max-w-[112px] max-h-[84px] flex items-center justify-center">
+          <MiniGolfDuelLogoSvg className="w-full h-full max-w-[96px] max-h-[72px]" />
         </div>
       );
     default:

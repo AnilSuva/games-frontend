@@ -337,7 +337,27 @@ export async function handleClientMessage(
       }
 
       const moveAction =
-        message.payload.from !== undefined && message.payload.to !== undefined
+        message.payload.action !== undefined
+          ? message.payload.action
+          : room.gameId === "wall-maze" &&
+            message.payload.row !== undefined &&
+            message.payload.col !== undefined &&
+            message.payload.orientation !== undefined
+          ? {
+              type: "PLACE_WALL" as const,
+              row: message.payload.row,
+              col: message.payload.col,
+              orientation: message.payload.orientation,
+            }
+          : room.gameId === "wall-maze" &&
+            message.payload.row !== undefined &&
+            message.payload.col !== undefined
+          ? {
+              type: "MOVE_PAWN" as const,
+              row: message.payload.row,
+              col: message.payload.col,
+            }
+          : message.payload.from !== undefined && message.payload.to !== undefined
           ? { type: "MOVE", from: message.payload.from, to: message.payload.to }
           : message.payload.column !== undefined
           ? { type: "MOVE", column: message.payload.column }
@@ -362,6 +382,8 @@ export async function handleClientMessage(
             : validation.error === "Invalid move position" ||
               validation.error === "Invalid column" ||
               validation.error === "Column is full" ||
+              validation.error?.startsWith("Invalid move:") ||
+              validation.error?.startsWith("Invalid wall:") ||
               validation.error?.includes("paused")
             ? "INVALID_MOVE"
             : validation.error === "Game is not in progress"

@@ -107,6 +107,25 @@ export const GAME_MANIFESTS: GameManifest[] = [
       import("@/games/board/chain-reaction/components/ChainReactionGame"),
   },
   {
+    id: "wall-maze",
+    title: "Wall Maze",
+    shortDescription: "Outmaneuver your rival through shifting walls.",
+    description:
+      "Race your pawn across a 9x9 grid while dropping 2-tile walls to force detours. Jump opponents, guard your corridors, and never seal off the final path.",
+    category: "board",
+    engine: "react-dom",
+    status: "available",
+    isVisible: true,
+    supportedModes: ["local-2p", "pvp-bot", "online-2p"],
+    defaultOrientation: "portrait",
+    aspectRatio: "1/1",
+    iconName: "grid",
+    badgeText: "New",
+    tags: ["Strategy", "Maze", "Turn-Based", "2-Player"],
+    loader: () =>
+      import("@/games/board/wall-maze/components/WallMazeGame"),
+  },
+  {
     id: "chess",
     title: "Chess",
     shortDescription: "The timeless battle of kings, queens, and pawns.",

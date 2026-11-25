@@ -127,6 +127,10 @@ export interface GameMovePayload {
   };
   row?: number;
   col?: number;
+  orientation?: "h" | "v";
+  action?:
+    | { type: "MOVE_PAWN"; row: number; col: number }
+    | { type: "PLACE_WALL"; row: number; col: number; orientation: "h" | "v" };
 }
 
 export interface GameRematchPayload {
